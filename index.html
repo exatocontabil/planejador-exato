@@ -985,7 +985,7 @@ function matrizImpostos(r){
   h+=`<tr class="tot"><td>Total de tributos e encargos</td>${ks.map(k=>`<td class="n${r[k].carga===minTot?' min':''}">${brl(r[k].carga)}<small>${pc(r[k].cargaPct,1)} da receita</small></td>`).join('')}</tr>`;
   h+=`<tr><td>Obrigações acessórias (informado)</td>${ks.map(k=>`<td class="n">${brl(r[k].acess)}</td>`).join('')}</tr>`;
   h+=`<tr class="tot"><td>O que sobra por ano</td>${ks.map(k=>`<td class="n">${brl(r[k].liq)}</td>`).join('')}</tr>`;
-  return h+`</tbody></table></div><p class="small">Valores sobre a receita bruta de ${brl(rec)}. Menor carga total em destaque. Encargos patronais aparecem junto do INSS: no Simples ele vem dentro do DAS, e nos outros regimes é pago por fora.</p>`;
+  return h+`</tbody></table></div><p class="small">Valores sobre a receita bruta de ${brl(rec)}. Menor carga total em destaque. Encargos patronais aparecem junto do INSS: no Simples ele vem dentro do DAS, e nos outros regimes é pago por fora.</p>`+(ks.includes('presumido')?`<div class="banner" style="margin-top:10px"><b>Por que o IRPJ e a CSLL do Presumido parecem pequenos?</b> Eles não incidem sobre o lucro, e sim sobre uma margem presumida da receita. No comércio e na indústria o IRPJ é 15% × 8% = <b>1,20%</b> da receita e a CSLL é 9% × 12% = <b>1,08%</b>. Em serviços a presunção é de 32%: IRPJ de 4,80% e CSLL de 2,88%. O IRPJ ainda tem adicional de 10% sobre o que passar de R$ 60 mil de base por trimestre (Lei 9.249/1995, arts. 3º, 15 e 20).</div>`:'');
 }
 function tabelaLinhas(x,rec){
   if(!x.linhas||!x.linhas.length)return '';

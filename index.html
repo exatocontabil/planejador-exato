@@ -981,7 +981,7 @@ function matrizImpostos(r){
   const rows=Object.keys(NOMEIMP).filter(n=>ks.some(k=>maps[k][n]>0.5));
   const minTot=Math.min(...ks.map(k=>r[k].carga));
   let h=`<div class="scroll"><table class="mx"><thead><tr><th>Tributo</th>${ks.map(k=>`<th>${REGC[k]}</th>`).join('')}</tr></thead><tbody>`;
-  for(const n of rows)h+=`<tr><td>${NOMEIMP[n]}</td>${ks.map(k=>{const v=maps[k][n];return `<td class="n">${v>0.5?brl(v)+'<small>'+pc(v/rec,1)+'</small>':'<span class="mut">—</span>'}</td>`}).join('')}</tr>`;
+  for(const n of rows)h+=`<tr><td>${NOMEIMP[n]}</td>${ks.map(k=>{const v=maps[k][n];return `<td class="n">${v>0.5?brl(v)+'<small>'+pc(v/rec,1)+' da receita</small>':'<span class="mut">—</span>'}</td>`}).join('')}</tr>`;
   h+=`<tr class="tot"><td>Total de tributos e encargos</td>${ks.map(k=>`<td class="n${r[k].carga===minTot?' min':''}">${brl(r[k].carga)}<small>${pc(r[k].cargaPct,1)} da receita</small></td>`).join('')}</tr>`;
   h+=`<tr><td>Obrigações acessórias (informado)</td>${ks.map(k=>`<td class="n">${brl(r[k].acess)}</td>`).join('')}</tr>`;
   h+=`<tr class="tot"><td>O que sobra por ano</td>${ks.map(k=>`<td class="n">${brl(r[k].liq)}</td>`).join('')}</tr>`;
@@ -1013,7 +1013,7 @@ function renderImp(){
   const ks=['simples','hibrido','presumido','real'].filter(k=>r[k]),win=ranking(r)[0];
   let h=`<h2>Impostos e alíquotas, regime a regime</h2><p class="sub" style="margin-bottom:14px">Aqui está a conta por trás da carga tributária de cada regime: quais tributos incidem, sobre qual base, com qual alíquota e quanto dá.</p>`;
   h+=`<div class="row" style="margin-bottom:6px"><div class="seg" id="segImpAno">${[2026,2027].map(a=>`<button data-a="${a}" aria-pressed="${a===ano}">${a}</button>`).join('')}</div>${ano===2027?`<div class="seg" id="segImpCen">${cenKs.map(k=>`<button data-c="${k}" aria-pressed="${k===ui.cen}">CBS ${pc4(N.P.cbs[k])}</button>`).join('')}</div>`:''}</div>`;
-  h+=`<div class="card"><div class="cardh"><div><h3>Quadro comparativo</h3><p class="small">Cada tributo em reais e em % da receita, lado a lado.</p></div></div>${matrizImpostos(r)}</div>`;
+  h+=`<div class="card"><div class="cardh"><div><h3>Quadro comparativo</h3><p class="small">Cada célula mostra o valor do tributo e, embaixo, quanto ele pesa na receita. Esse percentual não é a alíquota do tributo.</p></div></div>${matrizImpostos(r)}</div>`;
   h+=`<div class="card"><div class="cardh"><div><h3>Por que a carga é diferente</h3><p class="small">O que mais pesa em cada regime.</p></div></div><ul class="tight">${explicaCarga(r).map(t=>'<li>'+t+'</li>').join('')}</ul><p class="small">Em geral: o Simples tem uma alíquota efetiva única que cresce com a faixa de receita; o Presumido paga IRPJ e CSLL sobre uma margem presumida e o INSS patronal por fora; o Real paga sobre o lucro de verdade e aproveita créditos. Qual sai mais barato depende da margem, da folha e dos créditos da empresa.</p></div>`;
   h+=`<h3 style="margin-top:22px">Cálculo imposto por imposto</h3>`;
   for(const k of ks){const x=r[k];

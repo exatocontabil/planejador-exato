@@ -431,7 +431,7 @@ table.wf tr.tot td{font-weight:700;background:var(--bg);padding-left:10px;paddin
 <section class="panel" id="p-plan"></section>
 <section class="panel" id="p-dados"></section>
 <div id="modal" class="modal" hidden></div>
-<footer class="rod"><span>Exato Soluções Contábeis · Planejador tributário</span><span>Apoio ao planejamento: confira as normas e revise com o contador responsável antes de decidir.</span></footer>
+<footer class="rod"><span id="verProg">Exato Soluções Contábeis · Planejador tributário</span><span>Apoio ao planejamento: confira as normas e revise com o contador responsável antes de decidir.</span></footer>
 </div>
 
 <script>
@@ -535,6 +535,7 @@ function indiretos(Y,A,P,ano,cbs,regime){
   }
   const temTtd=ttdIt.length>0;
   const icmsBr=temTtd?Math.max(0,A.icmsDeb-ttdRem+ttdTax+ttdFundo-(Y.icmsCred-ttdEst)):icmsSem;
+  if(A.baseIcms>0&&A.icmsDeb===0&&(regime==='presumido'||regime==='real'))av.push('ICMS: a alíquota das vendas está em 0%, então o débito ficou zerado. Informe a alíquota em “Dados” ou anexe as notas de saída para o sistema estimá-la.');
   if(A.icmsDeb<Y.icmsCred)av.push('ICMS: créditos informados superam os débitos; saldo credor de '+brl(Y.icmsCred-A.icmsDeb)+' não aproveitado no cálculo.');
   imp.ICMS=icmsBr; imp.ISS=A.iss; imp.IPI=Y.ipi;
   memo.push(`ICMS = débitos − créditos = ${brl2(A.icmsDeb)} − ${brl2(Y.icmsCred)} = ${brl2(icmsBr)}  [débito = Σ receita × (1−%ST) × (1−%exp) × alíq. ICMS]`);
@@ -809,7 +810,15 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let N=null,R=null;
 
+function icmsAuto(){
+  const xm=ui.docs&&ui.docs.xml; if(!xm||!xm.Y||xm.Y.estInter===undefined)return;
+  const Y=xm.Y; if(Y.icmsVal>0||!(Y.eligBase>0))return;
+  const intra=Y.ufEmit==='SC'?0.17:null; if(!(Y.estIntraBase<=0.5||intra!=null))return;
+  const est=Math.round((Y.estInter+Y.estIntraBase*(intra||0))/Y.eligBase*10000)/100;
+  for(const a of [2026,2027])S.anos[a].ativ.forEach(x=>{if(TIPOS[x.tipo].merc&&(!(+x.aliqICMS>0)||x.aliqEst)){x.aliqICMS=est;x.aliqEst=true}});
+}
 function calcular(){
+  icmsAuto();
   N=norm(S); R=avaliar(N);
   try{localStorage.setItem('planej_v1',JSON.stringify(S))}catch(e){}
   $('#exBanner').hidden=!S.example;
@@ -1047,17 +1056,18 @@ function explicaCarga(r,ano){
   return ks.map(k=>{const x=r[k],c=catImpostos(x),top=Object.entries(c).filter(([,v])=>v>1).sort((a,b)=>b[1]-a[1]).slice(0,2);
     return `<b>${REG[x.nome]}</b> paga ${pc(x.cargaPct,1)} da receita (${brl(x.carga)}). Pesam mais: ${top.map(([id,v])=>lab[id]+' ('+brl(v)+')').join(' e ')}.`});
 }
+function bannerPend(){const {crit}=faltasDados(N);return crit.length?`<div class="banner bad" style="margin-bottom:14px"><b>O cálculo está incompleto.</b> Os valores abaixo são preliminares até você resolver:<ul class="tight" style="margin-top:6px">${crit.map(t=>'<li>'+esc(t)+'</li>').join('')}</ul><button class="btn ghost sm" type="button" onclick="setTab('dados');window.scrollTo(0,0)">Ir para Dados</button></div>`:''}
 function renderImp(){
   const o=$('#p-imp'); if(!o)return;
   const ano=ui.anoImp,cenKs=Object.keys(R[2027]),r=ano===2026?R[2026]:R[2027][ui.cen];
   const ks=['simples','hibrido','presumido','real'].filter(k=>r[k]),win=ranking(r)[0];
-  let h=`<h2>Impostos e alíquotas, regime a regime</h2><p class="sub" style="margin-bottom:14px">Aqui está a conta por trás da carga tributária de cada regime: quais tributos incidem, sobre qual base, com qual alíquota e quanto dá.</p>`;
+  let h=`<h2>Impostos e alíquotas, regime a regime</h2><p class="sub" style="margin-bottom:14px">Aqui está a conta por trás da carga tributária de cada regime: quais tributos incidem, sobre qual base, com qual alíquota e quanto dá.</p>`+bannerPend();
   h+=`<div class="row" style="margin-bottom:6px"><div class="seg" id="segImpAno">${[2026,2027].map(a=>`<button data-a="${a}" aria-pressed="${a===ano}">${a}</button>`).join('')}</div>${ano===2027?`<div class="seg" id="segImpCen">${cenKs.map(k=>`<button data-c="${k}" aria-pressed="${k===ui.cen}">CBS ${pc4(N.P.cbs[k])}</button>`).join('')}</div>`:''}</div>`;
   h+=`<div class="card"><div class="cardh"><div><h3>Quadro comparativo</h3><p class="small">Cada célula mostra o valor do tributo e, embaixo, quanto ele pesa na receita. Esse percentual não é a alíquota do tributo.</p></div></div>${matrizImpostos(r)}</div>`;
   h+=`<div class="card"><div class="cardh"><div><h3>Por que a carga é diferente</h3><p class="small">O que mais pesa em cada regime.</p></div></div><ul class="tight">${explicaCarga(r,ano).map(t=>'<li>'+t+'</li>').join('')}</ul><p class="small">Em geral: o Simples tem uma alíquota efetiva única que cresce com a faixa de receita; o Presumido paga IRPJ e CSLL sobre uma margem presumida e o INSS patronal por fora; o Real paga sobre o lucro de verdade e aproveita créditos. Qual sai mais barato depende da margem, da folha e dos créditos da empresa.</p></div>`;
   h+=`<h3 style="margin-top:22px">Cálculo imposto por imposto</h3>`;
   for(const k of ks){const x=r[k];
-    h+=`<details class="card tbl" ${k==='simples'||x===win?'open':''}><summary><span><b>${REG[k]}</b> <span class="small">· ${brl(x.carga)} de tributos e encargos (${pc(x.cargaPct,1)})${x===win?' · maior resultado':''}</span></span></summary><div>${tabelaLinhas(x,r.A.rec)}${extrasRegime(x,r.A.rec,ano)}</div></details>`;
+    h+=`<details class="card tbl" ${k==='simples'||x===win?'open':''}><summary><span><b>${REG[k]}</b> <span class="small">· ${brl(x.carga)} de tributos e encargos (${pc(x.cargaPct,1)})${x===win?' · maior resultado':''}</span></span></summary><div>${(x.av||[]).map(a=>`<div class="banner warn" style="margin-bottom:10px">${esc(a)}</div>`).join('')}${tabelaLinhas(x,r.A.rec)}${extrasRegime(x,r.A.rec,ano)}</div></details>`;
   }
   h+=`<p class="small">Alíquotas e bases seguem as normas indicadas em cada linha; pontos ainda pendentes (por exemplo, a alíquota da CBS em 2027) estão na aba “Riscos e base legal”. Fórmulas completas, com os números usados, estão em “Memória de cálculo”.</p>`;
   o.innerHTML=h;
@@ -1139,7 +1149,7 @@ function renderMemo(){
   const ano=ui.anoMem,r=ano===2026?R[2026]:R[2027][ui.cen],ks=['simples','hibrido','presumido','real'].filter(k=>r[k]);
   if(!ui.regMem||!r[ui.regMem])ui.regMem=ranking(r)[0].nome;
   const k=ui.regMem,x=r[k],Y=N.anos[ano],rec=r.A.rec,cenKs=Object.keys(R[2027]);
-  let h=`<h2>Memória de cálculo</h2><p class="sub" style="margin-bottom:14px">O passo a passo de cada tributo com os seus números, para você refazer a conta. Escolha o ano e o regime.</p>`;
+  let h=`<h2>Memória de cálculo</h2><p class="sub" style="margin-bottom:14px">O passo a passo de cada tributo com os seus números, para você refazer a conta. Escolha o ano e o regime.</p>`+bannerPend();
   h+=`<div class="row" style="margin-bottom:6px"><div class="seg" id="segMem">${[2026,2027].map(a=>`<button data-a="${a}" aria-pressed="${a===ano}">${a}</button>`).join('')}</div>${ano===2027?`<div class="seg" id="segMemCen">${cenKs.map(c=>`<button data-c="${c}" aria-pressed="${c===ui.cen}">CBS ${pc4(N.P.cbs[c])}</button>`).join('')}</div>`:''}<div class="seg" id="segMemReg">${ks.map(c=>`<button data-r="${c}" aria-pressed="${c===k}">${REGC[c]}</button>`).join('')}</div></div>`;
   h+=`<div class="kpis" style="margin:10px 0 16px">${kpi('Receita bruta',brl(rec),'Base de todos os cálculos')}${kpi('Tributos e encargos',brl(x.carga),pc(x.cargaPct,2)+' da receita')}${kpi('Sobra por ano',brl(x.liq),pc(x.liq/rec,1)+' da receita',x.liq<0?'bad':'good')}</div>`;
   h+=`<div class="card"><div class="cardh"><div><h3>Para onde vai a receita</h3><p class="small">Como cada R$ 100 faturados se dividem em ${REG[k]}.</p></div></div>${fluxoReceita(x,Y)}</div>`;
@@ -1951,7 +1961,7 @@ function restaurarDocs(sn){
   ui.slotSaved=sn.counts||null;
   if(typeof ttdAuto==='function'&&S&&S.ttd)ttdAuto();
 }
-const VERSAO_PROG='2026-10-30';
+const VERSAO_PROG='2026-10-30.8';
 function completarS(s){
   s.example=!!s.example;
   const base=exemplo();
@@ -2260,6 +2270,7 @@ function setTab(t){
 }
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{if(b.dataset.t!=='dados'&&ui.tab==='dados'){lerForm();calcular()}setTab(b.dataset.t)});
 iniciarPlano();renderDados();calcular();
+{const v=$('#verProg');if(v)v.textContent='Exato Soluções Contábeis · Planejador tributário · versão '+VERSAO_PROG}
 </script>
 
 </body>

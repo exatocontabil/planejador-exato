@@ -127,6 +127,25 @@ svg.chart .lab{font:700 11px var(--sans)}
 .leg{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;margin:8px 0 0;color:var(--muted)}
 .leg i{display:inline-block;width:18px;height:0;border-top:3px solid;vertical-align:middle;margin-right:6px}
 footer.rod{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+/* ---- importação ---- */
+.imp-grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.tile{display:flex;flex-direction:column;gap:10px;min-width:0}
+.drop{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:26px 18px;border:2px dashed var(--line);border-radius:16px;background:var(--bg);cursor:pointer;transition:border-color .15s,background .15s;min-height:168px;margin:0;color:var(--ink)}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--soft)}
+.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.drop svg{width:34px;height:34px;color:var(--accent);margin-bottom:2px}
+.drop b{font:700 15px var(--sans)}
+.drop span{font:500 12.5px/1.45 var(--sans);color:var(--muted);max-width:30ch}
+.drop .go{margin-top:6px;font:700 12.5px var(--sans);color:var(--accent)}
+.drop input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;padding:0;border:0}
+.sublink{display:flex;gap:14px;flex-wrap:wrap;font:600 13px var(--sans)}
+.sublink label{display:inline-flex;margin:0;color:var(--accent);cursor:pointer;position:relative}
+.sublink input[type=file]{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer;padding:0;border:0}
+details.mini{border:0;background:none;margin:0}
+details.mini summary{padding:0;font:600 13px var(--sans);color:var(--accent);list-style:none}
+details.mini summary::-webkit-details-marker{display:none}
+details.mini>div{padding:10px 0 0}
 @media (max-width:560px){.bar{grid-template-columns:1fr auto}.bar .t{grid-column:1/-1;order:3}.card{padding:18px;border-radius:16px}.regime{font-size:22px}.bignum{font-size:34px}}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -805,13 +824,19 @@ function vazio(){
   const y=()=>({ativ:[],salarios:0,prolabore:0,rat:0,terc:0,compras:0,icmsCred:0,baseCredPC:0,baseCredCBS:0,despesas:0,adicoes:0,prejuizo:0,ipi:0,acess:{simples:0,hibrido:0,presumido:0,real:0}});
   return {example:false,socios:S.socios||1,pctDist:S.pctDist||100,contabil:S.contabil,icmsIntegra:S.icmsIntegra,cbs:S.cbs,histRec:0,histRecMensal:'',histFolha:0,anos:{2026:y(),2027:y()}};
 }
+const ICO_DOC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>';
+const ICO_XML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-5 4 5 4M16 8l5 4-5 4M14 5l-4 14"/></svg>';
 function cardImport(){
-  return `<div class="card"><div class="k">Passo 1 · opcional</div><h3 style="margin-top:4px">Importar extrato do PGDAS-D</h3>
-  <p class="small">Baixe o “Extrato do Simples Nacional” da apuração mais recente no Portal do Simples e envie o PDF aqui. A leitura acontece no seu navegador; o arquivo não é enviado a ninguém. Se o PDF não abrir, abra-o, use Ctrl+A e Ctrl+C e cole o texto na caixa.</p>
-  ${ui.pgMsg?`<div class="banner ok">${esc(ui.pgMsg)}</div>`:''}
-  <div class="row"><input id="pgFile" type="file" accept=".pdf,.txt,application/pdf,text/plain" style="width:auto;max-width:100%"><button class="btn ghost" id="pgLer" type="button">Ler texto colado</button></div>
-  <label for="pgTxt" style="margin-top:10px">Ou cole aqui o texto do extrato</label><textarea id="pgTxt" placeholder="Extrato do Simples Nacional ..."></textarea>
-  <div id="pgOut" style="margin-top:12px"></div></div>`;
+  return `<div class="card"><div class="k">Passo 1 · opcional</div><h3 style="margin-top:4px">Importar documentos para preencher os dados</h3>
+  <p class="small" style="max-width:70ch">Arraste os arquivos para as áreas abaixo ou clique para escolher. A leitura acontece no seu navegador; nada é enviado a ninguém.</p>
+  ${ui.pgMsg?`<div class="banner ok">${esc(ui.pgMsg)}</div>`:''}${ui.xmlMsg?`<div class="banner ok">${esc(ui.xmlMsg)}</div>`:''}
+  <div class="imp-grid">
+   <div class="tile"><label class="drop" id="dropPg">${ICO_DOC}<b>Extrato do PGDAS-D</b><span>PDF do “Extrato do Simples Nacional” da apuração mais recente.</span><span class="go">Escolher PDF</span><input id="pgFile" type="file" accept=".pdf,.txt,application/pdf,text/plain" aria-label="Escolher o extrato do PGDAS-D"></label>
+    <details class="mini"><summary>Ou colar o texto do extrato</summary><div><textarea id="pgTxt" placeholder="Abra o PDF, use Ctrl+A, Ctrl+C e cole aqui"></textarea><div class="row" style="margin-top:8px"><button class="btn ghost" id="pgLer" type="button">Ler texto colado</button></div></div></details></div>
+   <div class="tile"><label class="drop" id="dropXml">${ICO_XML}<b>Notas fiscais em XML</b><span>NF-e e NFC-e de saída e de entrada, em arquivos soltos ou num .zip.</span><span class="go">Escolher arquivos</span><input id="xmlFiles" type="file" multiple accept=".xml,.zip,text/xml,application/zip" aria-label="Escolher XMLs ou ZIP"></label>
+    <div class="sublink"><label>Escolher uma pasta inteira<input id="xmlDir" type="file" webkitdirectory multiple aria-label="Escolher pasta de XMLs"></label></div></div>
+  </div>
+  <div id="pgOut" style="margin-top:16px"></div><div id="xmlOut" style="margin-top:16px"></div></div>`;
 }
 function pgRender(){
   const r=pgState,o=$('#pgOut'); if(!o)return;
@@ -997,14 +1022,7 @@ async function lerArquivosXml(files,prog){
   }
   return {docs,cancel,ign,total:txts.length};
 }
-function cardXml(){
-  return `<div class="card"><div class="k">Passo 2 · opcional</div><h3 style="margin-top:4px">Importar notas fiscais (XML)</h3>
-  <p class="small">Envie os XMLs de NF-e e NFC-e emitidas (saída) e recebidas (entrada), de um ou mais meses, em arquivos soltos, numa pasta ou num .zip. O programa separa vendas, devoluções e compras, estima ICMS-ST, monofásico, exportação e créditos de entrada, e compara a receita mensal com o extrato do PGDAS-D. A leitura acontece no seu navegador; nada é enviado.</p>
-  ${ui.xmlMsg?`<div class="banner ok">${esc(ui.xmlMsg)}</div>`:''}
-  <div class="row"><label style="margin:0">XMLs ou ZIP <input id="xmlFiles" type="file" multiple accept=".xml,.zip,text/xml,application/zip" style="width:auto;max-width:100%"></label>
-  <label style="margin:0">Pasta <input id="xmlDir" type="file" webkitdirectory multiple style="width:auto;max-width:100%"></label></div>
-  <div id="xmlOut" style="margin-top:12px"></div></div>`;
-}
+function cardXml(){return ''}
 function xmlRender(){
   const o=$('#xmlOut'); if(!o)return; const st=xmlState; if(!st){o.innerHTML='';return}
   if(st.erro){o.innerHTML=`<div class="banner bad">${esc(st.erro)}</div>`;return}
@@ -1081,6 +1099,14 @@ function aplicarXml(Y,nm){
   ui.xmlMsg='Notas aplicadas. Falta informar o pessoal, o ISS, os custos acessórios e conferir os valores estimados; depois clique em Calcular.';
   renderDados(); calcular(); setTab('dados'); window.scrollTo(0,0);
 }
+function ligaDrop(){
+  for(const [id,inp] of [['dropPg','pgFile'],['dropXml','xmlFiles']]){
+    const z=$('#'+id),f=$('#'+inp); if(!z||!f)continue;
+    ['dragenter','dragover'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.add('over')}));
+    ['dragleave','drop'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.remove('over')}));
+    z.addEventListener('drop',e=>{const fl=e.dataTransfer&&e.dataTransfer.files;if(!fl||!fl.length)return;try{f.files=fl}catch(x){return}f.onchange&&f.onchange()});
+  }
+}
 function ligaXml(){
   const go=async files=>{
     if(!files||!files.length)return;
@@ -1104,7 +1130,7 @@ function renderDados(){
   let h=`<h2>Dados da empresa</h2><p class="sub">Informe valores anuais em reais; percentuais em pontos (18 = 18%). Quando houver sazonalidade, cole 12 valores mensais no campo opcional da atividade. Nada é preenchido por suposição: o que ficar em branco vale zero e gera alerta.</p>`;
   h+=cardImport();
   h+=cardXml();
-  h+=`<div class="card"><div class="k">Passo 3</div><h3 style="margin-top:4px">Parâmetros gerais</h3><div class="grid">`+
+  h+=`<div class="card"><div class="k">Passo 2</div><h3 style="margin-top:4px">Parâmetros gerais</h3><div class="grid">`+
     fld('socios','Número de sócios',S.socios)+fld('pctDist','% do lucro distribuído',S.pctDist)+
     `<div><label for="f-contabil">Escrituração contábil completa (dividendos sem limite)</label><select id="f-contabil" data-p="contabil" data-b="1"><option value="1" ${S.contabil?'selected':''}>Sim</option><option value="0" ${!S.contabil?'selected':''}>Não</option></select></div>`+
     `<div><label for="f-icmsIntegra">ICMS e ISS integram a base da CBS/IBS (2027)</label><select id="f-icmsIntegra" data-p="icmsIntegra" data-b="1"><option value="1" ${S.icmsIntegra?'selected':''}>Sim (confirmar na LC 214)</option><option value="0" ${!S.icmsIntegra?'selected':''}>Não</option></select></div>`+
@@ -1115,7 +1141,7 @@ function renderDados(){
     `<div style="grid-column:1/-1"><label for="f-histRecMensal">Receita mensal 2025 (opcional, 12 valores, jan a dez)</label><textarea id="f-histRecMensal" data-p="histRecMensal">${esc(S.histRecMensal||'')}</textarea></div></div></div>`;
   for(const a of [2026,2027]){
     const y=S.anos[a];
-    h+=`<div class="card"><div class="k">Passo ${a===2026?4:5}</div><h3 style="margin-top:4px">Projeção ${a}</h3>`;
+    h+=`<div class="card"><div class="k">Passo ${a===2026?3:4}</div><h3 style="margin-top:4px">Projeção ${a}</h3>`;
     y.ativ.forEach((x,i)=>{
       const p=`anos.${a}.ativ.${i}.`;
       h+=`<div class="act"><div class="grid">`+fld(p+'nome','Atividade',x.nome,'text')+
@@ -1148,6 +1174,7 @@ function renderDados(){
   $('#btnEx').onclick=()=>{S=exemplo();renderDados();calcular()};
   ligaPGDAS();
   ligaXml();
+  ligaDrop();
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{lerForm();S.anos[b.dataset.add].ativ.push({nome:'Nova atividade',tipo:'comercio',anual:0,mensal:'',aliqICMS:0,aliqISS:0,pctST:0,pctMono:0,pctExp:0,pctB2B:0,red:0});S.example=false;renderDados()});
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{lerForm();const [a,i]=b.dataset.del.split(':');if(S.anos[a].ativ.length>1){S.anos[a].ativ.splice(+i,1);renderDados()}});
 }

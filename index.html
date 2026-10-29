@@ -914,9 +914,9 @@ function lerNfse(root,ign){
   const iss=parseFloat(g(root,['vISSQN','ValorIss']))||0;
   const pe=xq(root,'prest')||xq(root,'PrestadorServico')||xq(root,'Prestador')||xq(root,'emit')||xq(root,'IdentificacaoPrestador');
   const te=xq(root,'toma')||xq(root,'TomadorServico')||xq(root,'Tomador');
-  const num=g(root,['nNFSe','Numero'])||(inf.getAttribute&&inf.getAttribute('Id'))||'';
+  const num=(inf.getAttribute&&inf.getAttribute('Id'))||g(root,['nNFSe','Numero'])||'';
   const sn=g(root,['OptanteSimplesNacional','opSimpNac']);
-  const doc={tipo:'nfse',prest:xcad(pe),toma:xcad(te),dh:xdata(g(root,['dhEmi','DataEmissao','dhProc','dCompet','Competencia'])),valor,iss,aliq,
+  const doc={tipo:'nfse',prest:xcad(pe),toma:xcad(te),dh:xdata(g(root,['dCompet','Competencia','dhEmi','DataEmissao','dhProc'])),valor,iss,aliq,
     simples:g(root,['OptanteSimplesNacional'])?sn==='1':(g(root,['opSimpNac'])?sn==='2'||sn==='3':false)};
   doc.chave='nfse|'+doc.prest+'|'+num+'|'+doc.dh+'|'+valor;
   return doc;
@@ -1165,10 +1165,10 @@ function xmlRender(){
     kpi('Fretes (CT-e)',brl(Y.frete),Y.nFrete?Y.nFrete+' CT-e':'Nenhum CT-e')+
     kpi('Fornecedores do Simples',brl(Y.fornSimples+Y.servTomSimples+Y.freteSimples),'Crédito limitado')+
     kpi('Uso e consumo / ativo',brl(Y.uso)+' / '+brl(Y.ativo),'Uso e consumo vira despesa')+
-    `</div><h3>Receita e compras por mês de ${st.ano}</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Receita nas notas (líquida)</th>${pgm?'<th>Extrato PGDAS</th><th>Diferença</th>':''}<th>Compras</th></tr></thead><tbody>`;
+    `</div><h3>Movimento por mês de ${st.ano}</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Receita nas notas (líquida)</th>${pgm?'<th>Extrato PGDAS</th><th>Diferença</th>':''}<th>Compras</th>${Y.servTom?'<th>Serviços tomados</th>':''}${Y.frete?'<th>Fretes</th>':''}</tr></thead><tbody>`;
   for(const m of ms){
     if(!Y.meses.has(m))continue; const v=liq(m),e=pgm?pgm[st.ano+'-'+m]:undefined,d=e===undefined?null:v-e;
-    h+=`<tr><td>${m}/${st.ano}</td><td class="n">${brl2(v)}</td>${pgm?`<td class="n">${e===undefined?'—':brl2(e)}</td><td class="n">${d===null?'—':(Math.abs(d)<=1?'<span class="tag good">confere</span>':'<span class="tag bad">'+brl2(d)+'</span>')}</td>`:''}<td class="n">${brl2(Y.compras[m]||0)}</td></tr>`;
+    h+=`<tr><td>${m}/${st.ano}</td><td class="n">${brl2(v)}</td>${pgm?`<td class="n">${e===undefined?'—':brl2(e)}</td><td class="n">${d===null?'—':(Math.abs(d)<=1?'<span class="tag good">confere</span>':'<span class="tag bad">'+brl2(d)+'</span>')}</td>`:''}<td class="n">${brl2(Y.compras[m]||0)}</td>${Y.servTom?`<td class="n">${brl2(Y.servTomMes[m]||0)}</td>`:''}${Y.frete?`<td class="n">${brl2(Y.freteMes[m]||0)}</td>`:''}</tr>`;
   }
   h+=`</tbody></table></div>`;
   if(!pgm)h+=`<p class="small" style="margin-top:8px">Anexe também o extrato do PGDAS-D para comparar a receita das notas com a declarada.</p>`;

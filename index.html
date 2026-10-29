@@ -1837,6 +1837,24 @@ function restaurarDocs(sn){
   if(sn.xml&&sn.xml.Y)ui.docs.xml=Object.assign({},sn.xml,{Y:Object.assign({},sn.xml.Y,{meses:new Set(sn.xml.Y.meses||[])})});
   ui.slotSaved=sn.counts||null;
 }
+const VERSAO_PROG='2026-10-30';
+function completarS(s){
+  s.example=!!s.example;
+  const base=exemplo();
+  const fill=(a,b)=>{for(const k of Object.keys(b)){if(a[k]===undefined)a[k]=JSON.parse(JSON.stringify(b[k]));else if(b[k]&&typeof b[k]==='object'&&!Array.isArray(b[k])&&a[k]&&typeof a[k]==='object')fill(a[k],b[k])}};
+  fill(s,base);
+  const d={nome:'Atividade',tipo:'comercio',anual:0,mensal:'',aliqICMS:0,aliqISS:0,pctST:0,pctMono:0,pctExp:0,pctB2B:0,red:0};
+  for(const y of [2026,2027]){if(!Array.isArray(s.anos[y].ativ)||!s.anos[y].ativ.length)s.anos[y].ativ=JSON.parse(JSON.stringify(base.anos[y].ativ));s.anos[y].ativ.forEach(x=>{for(const k in d)if(x[k]===undefined)x[k]=d[k];if(!TIPOS[x.tipo])x.tipo='comercio'})}
+  return s;
+}
+function resumoDe(it){
+  const key=it.id+'|'+it.atualizado+'|'+VERSAO_PROG;ui.resCache=ui.resCache||{};
+  if(ui.resCache[key]!==undefined)return ui.resCache[key];
+  let r=null;
+  try{const s=completarS(JSON.parse(JSON.stringify(it.S))),n=norm(s),r27=avaliarAno(n,2027,n.P.cbs.base),rk=ranking(r27),w=rk[0],{crit}=faltasDados(n),dc=it.docs&&it.docs.counts?Object.values(it.docs.counts).filter(Boolean).length:0;
+    r={regime:w.nome,vantagem:rk[1]?w.liq-rk[1].liq:0,receita:r27.A.rec,liq:w.liq,crit:crit.length,docs:dc}}catch(e){r=null}
+  ui.resCache[key]=r;return r;
+}
 function resumoPlano(){
   try{const r27=R[2027].base,rk=ranking(r27),w=rk[0],{crit}=faltasDados(N);
     return {regime:w.nome,vantagem:rk[1]?w.liq-rk[1].liq:0,receita:r27.A.rec,liq:w.liq,crit:crit.length,docs:Object.values(docsContagem()).filter(Boolean).length,pa:pgState&&!pgState.erro?String(pgState.pa.mes).padStart(2,'0')+'/'+pgState.pa.ano:null}}catch(e){return null}
@@ -1846,7 +1864,7 @@ function salvarPlano(nome,comoNovo){
   const lib=libLer(),agora=Date.now();
   let it=!comoNovo&&PL.id?lib.find(x=>x.id===PL.id):null;
   if(!it){it={id:uid(),criado:agora};lib.unshift(it)}
-  it.nome=nome||PL.nome||nomePadrao(); it.atualizado=agora;
+  it.nome=nome||PL.nome||nomePadrao(); it.atualizado=agora; it.v=VERSAO_PROG;
   it.cnpj=(pgState&&!pgState.erro&&pgState.cnpjb)||(ui.docs&&ui.docs.xml&&ui.docs.xml.cnpj)||'';
   it.resumo=resumoPlano(); it.S=JSON.parse(JSON.stringify(S)); it.docs=JSON.parse(JSON.stringify(snapshotDocs(),(k,v)=>v instanceof Set?[...v]:v));
   if(!libGravar(lib))return false;
@@ -1856,7 +1874,7 @@ function salvarPlano(nome,comoNovo){
 }
 function abrirPlano(id){
   const it=libLer().find(x=>x.id===id); if(!it)return;
-  S=JSON.parse(JSON.stringify(it.S)); S.example=!!it.S.example; restaurarDocs(it.docs);
+  S=completarS(JSON.parse(JSON.stringify(it.S))); restaurarDocs(it.docs);
   PL={id:it.id,nome:it.nome,salvoEm:it.atualizado}; try{localStorage.setItem(ATUALK,it.id)}catch(e){}
   ui.msg='';ui.semAuto=true; renderDados(); calcular(); ui.semAuto=false; setTab('res'); window.scrollTo(0,0);
 }
@@ -1867,7 +1885,7 @@ function novoPlano(){
 }
 function iniciarPlano(){
   try{const id=localStorage.getItem(ATUALK),it=id?libLer().find(x=>x.id===id):null;
-    if(it&&it.S&&it.S.anos){S=JSON.parse(JSON.stringify(it.S));restaurarDocs(it.docs);PL={id:it.id,nome:it.nome,salvoEm:it.atualizado}}}catch(e){}
+    if(it&&it.S&&it.S.anos){S=completarS(JSON.parse(JSON.stringify(it.S)));restaurarDocs(it.docs);PL={id:it.id,nome:it.nome,salvoEm:it.atualizado}}else if(S&&S.anos)completarS(S)}catch(e){}
 }
 function pedirNome(titulo,valor,ok){
   const m=$('#modal'); m.hidden=false;
@@ -1900,7 +1918,7 @@ function importarPlanos(txt){
   const ok=L.filter(it=>it&&it.S&&it.S.anos&&[2026,2027].every(a=>it.S.anos[a]&&Array.isArray(it.S.anos[a].ativ)&&it.S.anos[a].ativ.length));
   if(!ok.length)throw new Error('Nenhum planejamento válido encontrado no arquivo.');
   const lib=libLer(),agora=Date.now();
-  ok.forEach(it=>{it.id=uid();it.nome=String(it.nome||'Planejamento importado').slice(0,120);it.atualizado=it.atualizado||agora;it.criado=it.criado||agora;lib.unshift(it)});
+  ok.forEach(it=>{completarS(it.S);it.id=uid();it.nome=String(it.nome||'Planejamento importado').slice(0,120);it.atualizado=it.atualizado||agora;it.criado=it.criado||agora;lib.unshift(it)});
   if(!libGravar(lib))throw new Error(ui.libErro);
   return ok.length;
 }
@@ -1914,7 +1932,7 @@ function renderPlan(){
   h+=`<div class="row" style="margin-bottom:16px"><input id="planQ" type="search" placeholder="Buscar por nome ou CNPJ" value="${esc(ui.planQ||'')}" style="max-width:280px"><span class="sp" style="flex:1"></span><label class="btn ghost sm" style="margin:0">Importar arquivo<input id="planImp" type="file" accept=".json,application/json"></label>${emb||!lib.length?'':'<button class="btn ghost sm" id="planExpTodos" type="button">Exportar todos</button>'}<button class="btn sm" id="planNovo" type="button">Novo planejamento</button></div>`;
   if(!lib.length)h+=`<div class="card" style="text-align:center;padding:36px 22px"><h3 style="margin-top:0">Nenhum planejamento salvo ainda</h3><p class="sub" style="margin:0 auto 14px">Monte uma análise e clique em “Salvar planejamento” na barra acima. Ela volta aqui para você abrir, duplicar ou exportar.</p></div>`;
   else if(!vis.length)h+=`<p>Nenhum planejamento encontrado para a busca.</p>`;
-  else h+=`<div class="plans">`+vis.map(it=>{const r=it.resumo||{},atual=it.id===PL.id;
+  else h+=`<div class="plans">`+vis.map(it=>{const r=resumoDe(it)||it.resumo||{},atual=it.id===PL.id;
     return `<div class="plan${atual?' atual':''}"><div class="ptop"><b>${esc(it.nome)}</b>${atual?'<span class="tag good" style="margin:0">Aberto</span>':''}</div><div class="small">${it.cnpj?'CNPJ básico '+esc(it.cnpj)+' · ':''}atualizado em ${fmtDH(it.atualizado)}</div>
     <div class="pchips">${r.regime?`<span class="pc">2027: ${esc(REGC[r.regime]||r.regime)}</span><span class="pc">${brl(r.vantagem||0)} de vantagem</span><span class="pc ${r.crit?'w':'g'}">${r.crit?r.crit+' pendência(s)':'Dados completos'}</span><span class="pc">${r.docs||0} de 5 docs</span>`:'<span class="pc">Sem resumo</span>'}${it.S&&it.S.example?'<span class="pc w">Dados de exemplo</span>':''}</div>
     <div class="row" style="gap:8px;margin-top:10px"><button class="btn sm" data-ab="${it.id}" type="button">Abrir</button><button class="btn ghost sm" data-dup="${it.id}" type="button">Duplicar</button>${emb?'':`<button class="btn ghost sm" data-exp="${it.id}" type="button">Exportar</button>`}<button class="lk" data-del="${it.id}" type="button" style="margin-left:auto">${ui.delId===it.id?'Confirmar exclusão':'Excluir'}</button></div></div>`}).join('')+`</div>`;
@@ -2003,6 +2021,7 @@ function lerForm(){
 }
 function setTab(t){
   ui.tab=t;
+  if(t==='plan'&&typeof renderPlan==='function')renderPlan();
   document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));
   document.querySelectorAll('section.panel').forEach(s=>s.classList.toggle('on',s.id==='p-'+t));
 }

@@ -938,7 +938,7 @@ function aplicarPGDAS(r,completo,m25){
       aliqICMS:0,aliqISS:0,pctST:Math.round(c.pctST*100)/100,pctMono:Math.round(c.pctMono*100)/100,pctExp:Math.round(c.pctExp*100)/100,pctB2B:0,red:0}));
   }
   S=N; pgState=null;
-  ui.pgMsg='Extrato aplicado. Agora preencha alíquotas de ICMS e ISS por atividade, pessoal, compras, créditos, despesas e custos acessórios, e clique em Calcular.';
+  ui.pgMsg='Extrato aplicado. O aviso amarelo abaixo lista só o que ainda falta e se aplica às suas atividades. Preencha e clique em Calcular.';
   renderDados(); calcular(); setTab('rel'); window.scrollTo(0,0);
 }
 function ligaPGDAS(){
@@ -1141,7 +1141,7 @@ function aplicarXml(Y,nm){
   }
   if(st.ano==='2025'&&nm===12){S.histRec=r2(rec-dev); S.histRecMensal=[...Array(12)].map((_,i)=>{const m=String(i+1).padStart(2,'0');return ((Y.rec[m]||0)-(Y.devol[m]||0)).toFixed(2).replace('.',',')}).join('; ')}
   S.example=false; xmlState=null;
-  ui.xmlMsg='Notas aplicadas. Falta informar o pessoal, o ISS, os custos acessórios e conferir os valores estimados; depois clique em Calcular.';
+  ui.xmlMsg='Notas aplicadas. O aviso amarelo abaixo lista só o que ainda falta e se aplica às suas atividades. Confira os valores estimados e clique em Calcular.';
   renderDados(); calcular(); setTab('rel'); window.scrollTo(0,0);
 }
 function ligaDrop(){
@@ -1169,18 +1169,22 @@ function ligaXml(){
 /* ---------- Relatório analítico ---------- */
 const RELCSS=`body{font:14px/1.6 system-ui,Arial,sans-serif;color:#111;max-width:860px;margin:24px auto;padding:0 18px}h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:28px 0 10px;border-bottom:2px solid #d10f14;padding-bottom:4px}h3{font-size:14px;margin:18px 0 6px}table{border-collapse:collapse;width:100%;font-size:12.5px;margin:6px 0 12px}th,td{border:1px solid #ddd;padding:6px 8px;text-align:right}th:first-child,td:first-child{text-align:left}th{background:#f3f3f3;font-size:11px;text-transform:uppercase}.parecer{border-left:4px solid #999;background:#f6f6f6;padding:10px 14px;margin:10px 0}.parecer.ok{border-color:#127a45}.parecer.atencao{border-color:#c98a00}.parecer.risco{border-color:#b3261e}.tag{font-weight:700;margin-right:6px}.meta td:first-child{width:36%;font-weight:600}.small{font-size:12px;color:#555}.sig{margin-top:40px}.scroll{overflow:visible;border:0}tr.win td{font-weight:700;background:#fdecec}.rel-logo img{height:34px;width:auto;margin-right:10px;vertical-align:middle}.rel-logo .wm{height:30px}`;
 function relLogo(){const e=document.querySelector('.brand .em'),w=document.querySelector('.brand .wm');return (e?`<img class="em" alt="" src="${e.src}">`:'')+(w?`<img class="wm" alt="Exato" src="${w.src}">`:'')}
-function faltasDados(){
-  const f=[],crit=[];
-  for(const a of [2026,2027]){const Y=N.anos[a];
-    if(Y.sal+Y.prol===0)crit.push(`${a}: salários e pró-labore não informados (afetam o fator r, a CPP e toda a comparação)`);
+function faltasDados(NN){
+  NN=NN||N; const M=new Map();
+  const add=(k,t,c,a,nome)=>{const e=M.get(k)||{t,c,anos:new Set(),nomes:new Set()};e.anos.add(a);if(nome)e.nomes.add(nome);M.set(k,e)};
+  for(const a of [2026,2027]){const Y=NN.anos[a];
+    const fr=Y.ativ.some(x=>x.tipo==='serv_fr'),iv=Y.ativ.some(x=>x.tipo==='serv_iv');
+    if(Y.sal+Y.prol===0)add('folha','Salários e pró-labore: necessários para calcular a CPP patronal, o RAT e os terceiros no Presumido e no Real'+(iv?'':' (no Simples a CPP já vem no DAS)')+(fr?'; também definem o fator r':''),true,a);
     Y.ativ.forEach(x=>{const T=TIPOS[x.tipo];
-      if(T.merc&&x.aliqICMS===0&&x.pctExp<1)crit.push(`${a}: alíquota de ICMS da atividade “${x.nome}” não informada (sem ela o ICMS do Presumido e do Real sai zerado)`);
-      if(!T.merc&&!T.semISS&&x.aliqISS===0&&x.pctExp<1)crit.push(`${a}: alíquota de ISS da atividade “${x.nome}” não informada`);});
-    if(!Y.acess.simples&&!Y.acess.presumido&&!Y.acess.real)f.push(`${a}: custo de obrigações acessórias não informado`);
-    if(Y.rat===0)f.push(`${a}: RAT/FAP não informado (encargos do Presumido e do Real ficam subestimados)`);
-    if(!Y.compras)f.push(`${a}: compras não informadas`);
+      if(T.merc&&x.aliqICMS===0&&x.pctExp<1)add('icms','Alíquota efetiva de ICMS das vendas (sem ela o ICMS do Presumido e do Real sai zerado)',true,a,x.nome);
+      if(!T.merc&&!T.semISS&&x.aliqISS===0&&x.pctExp<1)add('iss','Alíquota de ISS do município',true,a,x.nome)});
+    if(!Y.acess.simples&&!Y.acess.presumido&&!Y.acess.real)add('acess','Custo anual das obrigações acessórias de cada regime',false,a);
+    if(Y.rat===0&&Y.sal>0)add('rat','RAT/FAP (sem ele os encargos do Presumido e do Real ficam subestimados)',false,a);
+    if(!Y.compras)add('compras','Compras de mercadorias e insumos',false,a);
   }
-  return {f,crit:[...new Set(crit)]};
+  const fa=s=>s.size===2?'2026 e 2027':[...s][0],f=[],crit=[];
+  for(const [,e] of M){const t=e.t+(e.nomes.size?' ['+[...e.nomes].join(', ')+']':'')+' · '+fa(e.anos);(e.c?crit:f).push(t)}
+  return {f,crit};
 }
 function parecer(k,t){return `<div class="parecer ${k}"><span class="tag ${k==='ok'?'good':k==='atencao'?'warn':'bad'}">${k==='ok'?'Sem ressalvas':k==='atencao'?'Atenção':'Risco'}</span>${t}</div>`}
 function montarRelatorio(){
@@ -1198,7 +1202,7 @@ function montarRelatorio(){
   /* 1 resumo */
   h+=sec('Resumo e parecer conclusivo');
   if(crit.length){
-    h+=parecer('risco',`<strong>Parecer conclusivo não emitido.</strong> Faltam dados essenciais para comparar os regimes com segurança: <ul class="tight">${crit.map(c=>'<li>'+esc(c)+'</li>').join('')}</ul>Os quadros seguintes são preliminares e não devem embasar decisão.`);
+    h+=parecer('risco',`<strong>Parecer conclusivo não emitido.</strong> Faltam dados que se aplicam às atividades da empresa e são essenciais para comparar os regimes: <ul class="tight">${crit.map(c=>'<li>'+esc(c)+'</li>').join('')}</ul>Os quadros seguintes são preliminares e não devem embasar decisão.`);
   }else{
     const linha=(ano,rk,r)=>{const w=rk[0],s2=rk[1],sim=r.simples;return `<tr${''}><td>${ano}</td><td>${REG[w.nome]}</td><td class="n">${brl(w.liq)}</td><td class="n">${s2?brl(w.liq-s2.liq):'—'}</td><td class="n">${sim&&w.nome!=='simples'?brl(w.liq-sim.liq):(w.nome==='simples'?'—':'Simples indisponível')}</td></tr>`};
     h+=`<div class="scroll"><table><thead><tr><th>Exercício</th><th>Regime com maior resultado líquido</th><th>Resultado líquido</th><th>Vantagem sobre o 2º</th><th>Ganho sobre o Simples comum</th></tr></thead><tbody>${linha(2026,rk26,r26)}${linha(2027,rk27,r27)}</tbody></table></div>`;
@@ -1315,7 +1319,9 @@ function fld(path,label,val,type,extra){
   return `<div><label for="f-${path}">${label}</label><input id="f-${path}" data-p="${path}" type="${type}" ${type==='number'?'step="any"':''} value="${esc(val===undefined?'':val)}" ${extra||''}></div>`;
 }
 function renderDados(){
+  const frAny=[2026,2027].some(a=>S.anos[a].ativ.some(x=>x.tipo==='serv_fr'));
   let h=`<h2>Dados da empresa</h2><p class="sub">Informe valores anuais em reais; percentuais em pontos (18 = 18%). Quando houver sazonalidade, cole 12 valores mensais no campo opcional da atividade. Nada é preenchido por suposição: o que ficar em branco vale zero e gera alerta.</p>`;
+  {const fd=faltasDados(norm(S));const todos=[...fd.crit,...fd.f];if(todos.length&&!S.example)h+=`<div class="banner warn"><strong>Falta informar (só o que se aplica às suas atividades):</strong><ul class="tight" style="margin-top:8px">${todos.map(t=>'<li>'+esc(t)+'</li>').join('')}</ul></div>`}
   h+=cardImport();
   h+=cardXml();
   h+=`<div class="card"><div class="k">Passo 2</div><h3 style="margin-top:4px">Parâmetros gerais</h3><div class="grid">`+
@@ -1325,39 +1331,40 @@ function renderDados(){
     `</div><h3>Alíquota da CBS em 2027 (ainda não fixada pelo Senado: informe três hipóteses)</h3><p class="small">Referência: o TCU calculou 11,3468% (11,3%) em 28/10/2026, pendente de resolução do Senado. O valor baixo (9,2%) é a estimativa anterior da Fazenda e o alto (12,0%) é só uma margem de segurança; ajuste como achar melhor.</p><div class="grid">`+
     fld('cbs.baixo','Cenário baixo (%)',S.cbs.baixo)+fld('cbs.base','Cenário base (%)',S.cbs.base)+fld('cbs.alto','Cenário alto (%)',S.cbs.alto)+
     `</div><h3>Histórico: 12 meses de 2025</h3><div class="grid">`+
-    fld('histRec','Receita bruta total 2025 (R$)',S.histRec)+fld('histFolha','Folha 2025 para fator r (salários + pró-labore + FGTS, R$)',S.histFolha)+
+    fld('histRec','Receita bruta total 2025 (R$)',S.histRec)+(frAny?fld('histFolha','Folha 2025 para o fator r (salários + pró-labore + FGTS, R$)',S.histFolha):'')+
     `<div style="grid-column:1/-1"><label for="f-histRecMensal">Receita mensal 2025 (opcional, 12 valores, jan a dez)</label><textarea id="f-histRecMensal" data-p="histRecMensal">${esc(S.histRecMensal||'')}</textarea></div></div></div>`;
   for(const a of [2026,2027]){
-    const y=S.anos[a];
+    const y=S.anos[a],mercY=y.ativ.some(x=>TIPOS[x.tipo].merc),indY=y.ativ.some(x=>x.tipo==='industria'),frY=y.ativ.some(x=>x.tipo==='serv_fr'),ivY=y.ativ.some(x=>x.tipo==='serv_iv');
     h+=`<div class="card"><div class="k">Passo ${a===2026?3:4}</div><h3 style="margin-top:4px">Projeção ${a}</h3>`;
     y.ativ.forEach((x,i)=>{
-      const p=`anos.${a}.ativ.${i}.`;
+      const p=`anos.${a}.ativ.${i}.`,T=TIPOS[x.tipo];
       h+=`<div class="act"><div class="grid">`+fld(p+'nome','Atividade',x.nome,'text')+
         `<div><label for="f-${p}tipo">Tipo</label><select id="f-${p}tipo" data-p="${p}tipo" data-s="1">${Object.entries(TIPOS).map(([k,t])=>`<option value="${k}" ${x.tipo===k?'selected':''}>${t.rot}</option>`).join('')}</select></div>`+
         fld(p+'anual','Receita anual (R$)',x.anual)+
-        fld(p+'aliqICMS','Alíq. ICMS (%)',x.aliqICMS)+fld(p+'aliqISS','Alíq. ISS (%)',x.aliqISS)+
-        fld(p+'pctST','% receita com ICMS-ST',x.pctST)+fld(p+'pctMono','% receita monofásica (PIS/COFINS)',x.pctMono)+fld(p+'pctExp','% receita exportação',x.pctExp)+
+        (T.merc?fld(p+'aliqICMS','Alíq. efetiva de ICMS nas vendas (%)',x.aliqICMS)+fld(p+'pctST','% da receita com ICMS-ST',x.pctST)+fld(p+'pctMono','% da receita monofásica (PIS/COFINS)',x.pctMono):'')+
+        (!T.merc&&!T.semISS?fld(p+'aliqISS','Alíq. de ISS do município (%)',x.aliqISS):'')+
+        fld(p+'pctExp','% da receita de exportação',x.pctExp)+
         fld(p+'pctB2B','% vendido a contribuintes (B2B)',x.pctB2B)+fld(p+'red','Redução CBS/IBS da LC 214 (0, 30, 60 ou 100)',x.red)+
         `<div style="grid-column:1/-1"><label for="f-${p}mensal">Receita mensal (opcional, 12 valores; substitui a receita anual ÷ 12)</label><textarea id="f-${p}mensal" data-p="${p}mensal">${esc(x.mensal||'')}</textarea></div></div>`+
         `<div class="row" style="margin-top:8px"><button class="btn ghost" data-del="${a}:${i}">Remover atividade</button></div></div>`;
     });
-    h+=`<div class="row"><button class="btn ghost" data-add="${a}">Adicionar atividade</button></div><h3>Pessoal e encargos</h3><div class="grid">`+
+    h+=`<div class="row"><button class="btn ghost" data-add="${a}">Adicionar atividade</button></div><h3>Pessoal e encargos</h3><p class="small">Necessários para calcular a CPP patronal (20%), o RAT e os terceiros no Presumido e no Real. No Simples a CPP já vem dentro do DAS${ivY?', exceto no Anexo IV':''}${frY?'. A folha também define o fator r das atividades de serviço':''}.</p><div class="grid">`+
       fld(`anos.${a}.salarios`,'Salários CLT no ano (R$)',y.salarios)+fld(`anos.${a}.prolabore`,'Pró-labore no ano (R$)',y.prolabore)+
       fld(`anos.${a}.rat`,'RAT/FAP (%)',y.rat)+fld(`anos.${a}.terc`,'Terceiros/Sistema S (%)',y.terc)+
       `</div><h3>Entradas, créditos e despesas</h3><div class="grid">`+
       fld(`anos.${a}.compras`,'Compras de mercadorias e insumos (R$, valor da nota)',y.compras)+
-      fld(`anos.${a}.icmsCred`,'ICMS creditável nas entradas (R$)',y.icmsCred)+
+      (mercY?fld(`anos.${a}.icmsCred`,'ICMS creditável nas entradas (R$)',y.icmsCred):'')+
       fld(`anos.${a}.baseCredPC`,'Base de créditos PIS/COFINS (R$, usada em 2026)',y.baseCredPC)+
       fld(`anos.${a}.baseCredCBS`,'Base de créditos CBS/IBS (R$, usada em 2027)',y.baseCredCBS)+
       fld(`anos.${a}.despesas`,'Despesas operacionais, exceto pessoal e tributos (R$)',y.despesas)+
-      fld(`anos.${a}.adicoes`,'Adições menos exclusões do Lucro Real (R$)',y.adicoes)+
-      fld(`anos.${a}.prejuizo`,'Prejuízo fiscal acumulado (R$)',y.prejuizo)+
-      fld(`anos.${a}.ipi`,'IPI líquido no regime regular (R$)',y.ipi)+
+      (indY?fld(`anos.${a}.ipi`,'IPI líquido no regime regular (R$)',y.ipi):'')+
+      `<details class="mini" style="grid-column:1/-1"><summary>Campos avançados do Lucro Real</summary><div class="grid" style="padding-top:12px">`+fld(`anos.${a}.adicoes`,'Adições menos exclusões (R$)',y.adicoes)+fld(`anos.${a}.prejuizo`,'Prejuízo fiscal acumulado (R$)',y.prejuizo)+`</div></details>`+
       `</div><h3>Custo anual das obrigações acessórias por regime (R$)</h3><div class="grid">`+
       fld(`anos.${a}.acess.simples`,'Simples',y.acess.simples)+fld(`anos.${a}.acess.hibrido`,'Híbrido',y.acess.hibrido)+fld(`anos.${a}.acess.presumido`,'Presumido',y.acess.presumido)+fld(`anos.${a}.acess.real`,'Real',y.acess.real)+`</div></div>`;
   }
   h+=`<div class="row"><button class="btn" id="btnCalc">Calcular</button><button class="btn ghost" id="btnEx">Restaurar exemplo fictício</button></div>`;
   $('#p-dados').innerHTML=h;
+  document.querySelectorAll('select[data-s]').forEach(s=>s.onchange=()=>{lerForm();renderDados()});
   $('#btnCalc').onclick=()=>{lerForm();calcular();setTab('res')};
   $('#btnEx').onclick=()=>{S=exemplo();renderDados();calcular()};
   ligaPGDAS();

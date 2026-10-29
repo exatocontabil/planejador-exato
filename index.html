@@ -1594,10 +1594,12 @@ function xmlRender(){
   if(!st.docs.length){o.innerHTML=ign.outros+ign.invalidos+ign.naoXml+ign.nfse+ign.nfseIlegivel?`<div class="banner warn">Nenhuma nota válida lida.${ign.nfseIlegivel?' '+ign.nfseIlegivel+' NFS-e em layout que não consegui ler: me envie um exemplo.':''} Ignorados: ${ign.outros+ign.invalidos+ign.naoXml} arquivo(s) de outro tipo ou inválidos.</div>`:'';return}
   if(!st.cnpj)st.cnpj=detectarCnpj(st.docs);
   const cn=dig(st.cnpj); const {por,c}=cn.length>=8?agregarXml({...st,cnpj:cn}):{por:{},c:{}};
-  const anos=Object.keys(por).sort(); if(!st.ano||!por[st.ano])st.ano=anos[anos.length-1];
+  const anos=Object.keys(por).sort(); if(!st.ano||!por[st.ano]){const rc=x=>sum(Object.values(por[x].rec)),mx=Math.max(...anos.map(rc));st.ano=mx>0?[...anos].reverse().find(x=>rc(x)===mx):anos[anos.length-1]}
   const Y=por[st.ano];
   ui.docs=ui.docs||{};
-  if(Y){ui.docs.xml={Y,ano:st.ano,c,ign,ndocs:st.docs.length,cnpj:cn};ttdAuto();if(typeof refreshTtd==='function')refreshTtd()}
+  if(Y){const cn8x=cn.length>=14?cn.slice(0,8):cn,sd=st.slots.saida.docs;let nr=0;sd.forEach(d=>{const p=papelDoc(d,cn8x);if(p==='saida'||p==='prestado')nr++});
+    const av={};Object.keys(por).forEach(a=>{av[a]=por[a].eligBase||0});
+    ui.docs.xml={Y,ano:st.ano,c,ign,ndocs:st.docs.length,cnpj:cn,info:{saidaN:sd.length,saidaR:nr,terceiros:c.terceiros||0,anosVendas:av}};ttdAuto();if(typeof refreshTtd==='function')refreshTtd()}
   const cn8=cn.length>=14?cn.slice(0,8):cn;
   const fora=[];
   for(const s of SLOTS){const bad=st.slots[s.id].docs.filter(d=>{const p=papelDoc(d,cn8);return p&&!ESPERADO[s.id].includes(p)}).length;if(bad)fora.push(`${bad} documento(s) em “${s.t}” têm outro papel para este CNPJ (por exemplo, nota de entrada no campo de saída). Foram usados mesmo assim, conforme o papel real.`)}
@@ -2103,7 +2105,7 @@ function cardTtd(){
     its.forEach((x,i)=>{const p=`ttd.itens.${i}.`,tab=x.tipo==='p478'?TAB478[+x.aliqInter]:null,ak=x.autoKind,au=x.auto,auto=ak&&x.modo!=='manual',R$=v=>brl(v||0);
       let det='';
       if(ak==='ecom'&&au){const dg=au.diag||{};
-        det=`<div class="banner ${au.base>0?'ok':'warn'}" style="margin:10px 0">${au.base>0?`Detectado nas notas de ${esc(au.ano)}: <b>${R$(au.base)}</b> vendidos pela internet ou telemarketing a consumidor final não contribuinte de outro estado, ou seja, <b>${pc(au.pct,1)}</b> da receita de mercadorias. Por alíquota interestadual: 4% ${R$(au.cl[4])}, 7% ${R$(au.cl[7])}, 12% ${R$(au.cl[12])}.`:`Não encontrei vendas elegíveis nas notas de ${esc(au.ano)}. Veja abaixo como as suas vendas foram classificadas.`}</div>
+        det=`<div class="banner ${au.base>0?'ok':'warn'}" style="margin:10px 0">${au.base>0?`Detectado nas notas de ${esc(au.ano)}: <b>${R$(au.base)}</b> vendidos pela internet ou telemarketing a consumidor final não contribuinte de outro estado, ou seja, <b>${pc(au.pct,1)}</b> da receita de mercadorias. Por alíquota interestadual: 4% ${R$(au.cl[4])}, 7% ${R$(au.cl[7])}, 12% ${R$(au.cl[12])}.`:`Não encontrei vendas elegíveis nas notas de ${esc(au.ano)}.${semBase(au)} Veja abaixo como as vendas foram classificadas.`}</div>
         <details class="mini" ${au.base>0?'':'open'} style="margin:6px 0 10px"><summary>Como as vendas foram classificadas</summary><div style="padding-top:8px"><div class="scroll"><table><tbody>
           <tr><td>Vendas dentro do estado</td><td class="n">${R$(dg.interna)}</td></tr>
           <tr><td>Interestaduais para contribuinte do ICMS</td><td class="n">${R$(dg.interContrib)}</td></tr>
@@ -2131,12 +2133,23 @@ function cardTtd(){
   }
   return h+`</div></details>`;
 }
+function semBase(au){
+  const inf=au.info||{},outros=Object.entries(inf.anosVendas||{}).filter(([a,v])=>a!==String(au.ano)&&v>0).map(([a])=>a);
+  if(!(au.eligBase>0)){
+    let w=` Nenhuma venda de mercadoria foi reconhecida: no campo de saída há ${inf.saidaN||0} nota(s) e ${inf.saidaR||0} foram reconhecidas como emitidas pelo CNPJ ${esc(fmtCnpj(inf.cnpj||''))}.`;
+    if(outros.length)w+=` Há vendas em ${outros.join(', ')}: troque o “Ano a usar” no passo 2.`;
+    else if((inf.saidaN||0)>0&&!(inf.saidaR>0))w+=' Confira o CNPJ da empresa no passo 2.';
+    else if(!(inf.saidaN>0))w+=' Anexe as NF-e de saída no passo 2.';
+    return w;
+  }
+  return ' Há vendas de mercadoria, mas nenhuma é interestadual para consumidor final não contribuinte por venda não presencial.';
+}
 function ttdAuto(){
   const xm=ui.docs&&ui.docs.xml; if(!xm||!xm.Y||!S.ttd||!S.ttd.itens)return;
   const Y=xm.Y,el=Y.eligBase||0,ec=Y.ecom||{base:0,cl:{}};
   S.ttd.itens.forEach(x=>{
     if(x.autoKind==='ecom'){const en=Y.ecomNd||{base:0,cl:{}},inc=!!x.incSemPres,base=ec.base+(inc?en.base:0);
-      x.auto={ano:xm.ano,pct:el>0?base/el:0,base,eligBase:el,interCF:Y.interCF||0,cl:{4:(ec.cl[4]||0)+(inc?en.cl[4]||0:0),7:(ec.cl[7]||0)+(inc?en.cl[7]||0:0),12:(ec.cl[12]||0)+(inc?en.cl[12]||0:0)},diag:Y.diag||null,npBase:ec.base,ndBase:en.base,inc}}
+      x.auto={ano:xm.ano,pct:el>0?base/el:0,base,eligBase:el,interCF:Y.interCF||0,cl:{4:(ec.cl[4]||0)+(inc?en.cl[4]||0:0),7:(ec.cl[7]||0)+(inc?en.cl[7]||0:0),12:(ec.cl[12]||0)+(inc?en.cl[12]||0:0)},diag:Y.diag||null,npBase:ec.base,ndBase:en.base,inc,info:xm.info?Object.assign({cnpj:xm.cnpj},xm.info):null}}
     else if(x.autoKind==='importada')x.auto={ano:xm.ano,pct:el>0?(Y.impBase||0)/el:0,base:Y.impBase||0,eligBase:el};
   });
 }

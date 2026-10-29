@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Planejador Tributário Exato</title>
+<style>
+/* Layout: painel de decisão em coluna única; resultado primeiro, dados depois; números em fonte tabular */
+:root{
+  --bg:#f6f6f6; --surface:#ffffff; --ink:#141414; --muted:#5d5d5d; --line:#dedede;
+  --accent:#c80000; --accent-ink:#ffffff; --soft:#fbeaea; --btn:#c80000; --btn-ink:#ffffff; --wm-filter:none;
+  --good:#17703f; --warn:#9a5a00; --bad:#b3261e; --warnbg:#fff4de; --badbg:#fde9e7; --goodbg:#e4f3ea;
+  --c1:#2a62c9; --c2:#0b8a78; --c3:#b56d00; --c4:#8e3fb8;
+  --serif:'Poppins',system-ui,sans-serif; --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111111; --surface:#1b1b1b; --ink:#efefef; --muted:#a3a3a3; --line:#303030;
+  --accent:#ff5a52; --accent-ink:#1a0505; --soft:#2c1515; --btn:#c80000; --btn-ink:#ffffff; --wm-filter:invert(1);
+  --good:#5fd08e; --warn:#f0b44c; --bad:#ff8a80; --warnbg:#33290f; --badbg:#3a1b19; --goodbg:#12301f;
+  --c1:#7aa8ff; --c2:#3fcbb6; --c3:#f0b44c; --c4:#d19af0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111111; --surface:#1b1b1b; --ink:#efefef; --muted:#a3a3a3; --line:#303030;
+  --accent:#ff5a52; --accent-ink:#1a0505; --soft:#2c1515; --btn:#c80000; --btn-ink:#ffffff; --wm-filter:invert(1);
+  --good:#5fd08e; --warn:#f0b44c; --bad:#ff8a80; --warnbg:#33290f; --badbg:#3a1b19; --goodbg:#12301f;
+  --c1:#7aa8ff; --c2:#3fcbb6; --c3:#f0b44c; --c4:#d19af0; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans);padding-block:0 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1040px;margin:0 auto}
+header{padding:0 0 8px}
+.brandbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:16px 0;border-bottom:3px solid var(--accent);margin-bottom:26px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand img{display:block;height:auto}
+.brand .em{width:40px}
+.brand .wm{width:118px;filter:var(--wm-filter)}
+.brand .sec{font:500 10.5px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);border-left:1px solid var(--line);padding-left:12px;line-height:1.3}
+.brandbar .ref{font-size:12.5px;color:var(--muted)}
+footer.rod{margin-top:32px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font:600 28px/1.2 var(--serif);margin:0 0 6px;text-wrap:balance}
+h2{font:600 20px/1.25 var(--serif);margin:0 0 12px;text-wrap:balance}
+h3{font:600 16px/1.3 var(--sans);margin:18px 0 8px}
+p{margin:0 0 10px;max-width:72ch}
+.sub{color:var(--muted);max-width:70ch}
+nav.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin:18px 0 22px;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5}
+nav.tabs button{background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);font:500 14px var(--sans);padding:10px 12px;cursor:pointer}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section.panel{display:none}section.panel.on{display:block}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:16px;min-width:0}
+.banner{border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:14px}
+.banner.warn{background:var(--warnbg);color:var(--ink);border:1px solid var(--warn)}
+.banner.bad{background:var(--badbg);border:1px solid var(--bad)}
+.banner.ok{background:var(--goodbg);border:1px solid var(--good)}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.reco{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.reco .card{margin:0}
+.big{font:600 24px/1.15 var(--serif);margin:4px 0}
+.k{font:600 11px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tag{display:inline-block;font:600 11px var(--sans);padding:2px 8px;border-radius:99px;margin-right:6px}
+.tag.good{background:var(--goodbg);color:var(--good)}.tag.warn{background:var(--warnbg);color:var(--warn)}.tag.bad{background:var(--badbg);color:var(--bad)}
+.scroll{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr.win td{background:var(--soft);font-weight:600}
+tr.out td{color:var(--muted)}
+label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:3px}
+input,select,textarea{width:100%;font:14px var(--mono);padding:7px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink)}
+select{font-family:var(--sans)}
+textarea{min-height:44px;font-size:12.5px}
+input[type=checkbox]{width:auto}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{background:var(--btn);color:var(--btn-ink);border:0;border-radius:4px;padding:9px 16px;font:600 14px var(--sans);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;margin:0 0 12px}
+.seg button{background:var(--surface);color:var(--muted);border:0;padding:7px 12px;font:500 13px var(--sans);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--btn);color:var(--btn-ink)}
+details{border:1px solid var(--line);border-radius:6px;margin-bottom:10px;background:var(--surface)}
+summary{cursor:pointer;padding:10px 14px;font-weight:600}
+details>div{padding:0 14px 14px}
+pre.memo{font:12.5px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin:0;color:var(--ink)}
+ul.tight{margin:0 0 10px;padding-left:20px}ul.tight li{margin-bottom:4px;max-width:78ch}
+.act{border:1px dashed var(--line);border-radius:6px;padding:12px;margin-bottom:12px}
+svg.chart{width:100%;height:auto;max-width:100%}
+svg.chart text{fill:var(--muted);font:11px var(--mono)}
+svg.chart .ax{stroke:var(--line)}
+svg.chart .lab{font:600 11px var(--sans)}
+.leg{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;margin:6px 0 0}
+.leg i{display:inline-block;width:18px;height:0;border-top:3px solid;vertical-align:middle;margin-right:5px}
+.small{font-size:12.5px;color:var(--muted)}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Poppins:wght@500;600&display=swap">
+
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brandbar">
+    <div class="brand"><img class="em" alt="" src="data:image/png;base64,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"><img class="wm" alt="Exato" src="data:image/png;base64,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"><span class="sec">Soluções<br>contábeis</span></div>
+    <div class="ref">Planejamento tributário · exercícios 2026 e 2027</div>
+  </div>
+  <h1>Planejador Tributário: Simples, Presumido, Real e Híbrido</h1>
+  <p class="sub">Compara 2026 e 2027 para empresa hoje no Simples Nacional, com memória de cálculo, ponto de equilíbrio e lista do que ainda depende de regulamentação. Tudo roda no seu navegador; nada é enviado.</p>
+</header>
+
+<nav class="tabs" role="tablist" id="tabs">
+  <button role="tab" data-t="res" aria-selected="true">Conclusão e números</button>
+  <button role="tab" data-t="eq" aria-selected="false">Ponto de equilíbrio</button>
+  <button role="tab" data-t="memo" aria-selected="false">Memória de cálculo</button>
+  <button role="tab" data-t="risk" aria-selected="false">Riscos e base legal</button>
+  <button role="tab" data-t="dados" aria-selected="false">Dados da empresa</button>
+</nav>
+
+<div id="exBanner" class="banner warn" hidden><strong>Dados de exemplo fictícios.</strong> Os números abaixo ilustram o funcionamento. Abra “Dados da empresa”, informe os valores reais e clique em Calcular.</div>
+
+<section class="panel on" id="p-res"></section>
+<section class="panel" id="p-eq"></section>
+<section class="panel" id="p-memo"></section>
+<section class="panel" id="p-risk"></section>
+<section class="panel" id="p-dados"></section>
+<footer class="rod"><span>Exato Soluções Contábeis · Planejador tributário</span><span>Apoio ao planejamento: confira as normas e revise com o contador responsável antes de decidir.</span></footer>
+</div>
+
+<script>
+/* ===================== MOTOR DE CÁLCULO (puro) ===================== */
+//CALC_START
+const LIM=4.8e6, SUB=3.6e6;
+const sum=a=>a.reduce((s,v)=>s+v,0);
+const ANEXOS={
+ I:{f:[[180000,.04,0],[360000,.073,5940],[720000,.095,13860],[1800000,.107,22500],[3600000,.143,87300],[4800000,.19,378000]],
+  cols:['IRPJ','CSLL','COFINS','PIS','CPP','ICMS'],
+  rows:[[5.5,3.5,12.74,2.76,41.5,34],[5.5,3.5,12.74,2.76,41.5,34],[5.5,3.5,12.74,2.76,42,33.5],[5.5,3.5,12.74,2.76,42,33.5],[5.5,3.5,12.74,2.76,42,33.5],[13.5,10,28.27,6.13,42.1,0]]},
+ II:{f:[[180000,.045,0],[360000,.078,5940],[720000,.10,13860],[1800000,.112,22500],[3600000,.147,85500],[4800000,.30,720000]],
+  cols:['IRPJ','CSLL','COFINS','PIS','CPP','IPI','ICMS'],
+  rows:[[5.5,3.5,11.51,2.49,37.5,7.5,32],[5.5,3.5,11.51,2.49,37.5,7.5,32],[5.5,3.5,11.51,2.49,37.5,7.5,32],[5.5,3.5,11.51,2.49,37.5,7.5,32],[5.5,3.5,11.51,2.49,37.5,7.5,32],[8.5,7.5,20.96,4.54,23.5,35,0]]},
+ III:{f:[[180000,.06,0],[360000,.112,9360],[720000,.135,17640],[1800000,.16,35640],[3600000,.21,125640],[4800000,.33,648000]],
+  cols:['IRPJ','CSLL','COFINS','PIS','CPP','ISS'],
+  rows:[[4,3.5,12.82,2.78,43.4,33.5],[4,3.5,14.05,3.05,43.4,32],[4,3.5,13.64,2.96,43.4,32.5],[4,3.5,13.64,2.96,43.4,32.5],[4,3.5,12.82,2.78,43.4,33.5],[35,15,16.03,3.47,30.5,0]]},
+ IV:{f:[[180000,.045,0],[360000,.09,8100],[720000,.102,12420],[1800000,.14,39780],[3600000,.22,183780],[4800000,.33,828000]],
+  cols:['IRPJ','CSLL','COFINS','PIS','CPP','ISS'],
+  rows:[[18.8,15.2,17.67,3.83,0,44.5],[19.8,15.2,20.55,4.45,0,40],[20.8,15.2,19.73,4.27,0,40],[17.8,19.2,18.9,4.1,0,40],[18.8,19.2,18.9,4.1,0,39],[53.5,21.5,20.55,4.45,0,0]]},
+ V:{f:[[180000,.155,0],[360000,.18,4500],[720000,.195,9900],[1800000,.205,17100],[3600000,.23,62100],[4800000,.305,540000]],
+  cols:['IRPJ','CSLL','COFINS','PIS','CPP','ISS'],
+  rows:[[25,15,14.1,3.05,28.85,14],[23,15,14.1,3.05,27.85,17],[24,15,14.92,3.23,23.85,19],[21,15,15.74,3.41,23.85,21],[23,12.5,14.1,3.05,23.85,23.5],[35,15.5,16.44,3.56,29.5,0]]}
+};
+const TABELAS_OK=Object.values(ANEXOS).every(a=>a.rows.every(r=>Math.abs(sum(r)-100)<0.005));
+const TIPOS={
+ comercio:{rot:'Comércio (revenda)',anexo:'I',irpj:.08,csll:.12,merc:true},
+ industria:{rot:'Indústria',anexo:'II',irpj:.08,csll:.12,merc:true},
+ serv_fr:{rot:'Serviço com fator r (Anexo III ou V)',anexo:'III/V',irpj:.32,csll:.32},
+ serv_iii:{rot:'Serviço Anexo III',anexo:'III',irpj:.32,csll:.32},
+ serv_iv:{rot:'Serviço Anexo IV (obras, vigilância, limpeza, advocacia)',anexo:'IV',irpj:.32,csll:.32},
+ serv_v:{rot:'Serviço Anexo V',anexo:'V',irpj:.32,csll:.32},
+ loc_movel:{rot:'Locação de bens móveis',anexo:'III',irpj:.32,csll:.32,semISS:true}
+};
+const REG={simples:'Simples Nacional',hibrido:'Simples + IBS/CBS regular (híbrido)',presumido:'Lucro Presumido',real:'Lucro Real'};
+
+function efetiva(an,rbt){
+  const F=ANEXOS[an].f; let k=F.findIndex(t=>rbt<=t[0]); if(k<0)k=5;
+  const al=F[k][1], pd=F[k][2];
+  return {k, al, pd, er: rbt>0?(rbt*al-pd)/rbt:F[0][1]};
+}
+function agg(Y){
+  const a={rec:0,exp:0,mono:0,icmsDeb:0,iss:0,recMerc:0};
+  for(const x of Y.ativ){const T=TIPOS[x.tipo],r=sum(x.m);
+    a.rec+=r;a.exp+=r*x.pctExp;a.mono+=r*(1-x.pctExp)*x.pctMono;
+    if(T.merc){a.icmsDeb+=r*(1-x.pctST)*(1-x.pctExp)*x.aliqICMS;a.recMerc+=r}
+    else if(!T.semISS){a.iss+=r*(1-x.pctExp)*x.aliqISS}}
+  return a;
+}
+function pessoal(Y){
+  const pes=Y.sal+Y.prol+.08*Y.sal;
+  const encReg=.20*(Y.sal+Y.prol)+(Y.rat+Y.terc)*Y.sal;
+  const encIV=.20*(Y.sal+Y.prol)+Y.rat*Y.sal;
+  return {pes,encReg,encIV};
+}
+function calcSimples(Y,hr,hf){
+  const r={inel:false,comp:{},linhas:[],icmsForaDeb:0,issFora:0,recMercFora:0,das:0,rbtMax:0,frMin:null,frMax:null};
+  const recT=[...Array(12)].map((_,i)=>sum(Y.ativ.map(x=>x.m[i])));
+  const SR=hr.concat(recT), SF=hf.concat(Y.folhaFR);
+  for(let i=0;i<12;i++){
+    const rbt=sum(SR.slice(i,i+12)), f12=sum(SF.slice(i,i+12));
+    if(rbt>LIM)r.inel=true;
+    r.rbtMax=Math.max(r.rbtMax,rbt);
+    const fr=rbt>0?f12/rbt:0;
+    for(const x of Y.ativ){
+      const rev=x.m[i]; if(!rev)continue;
+      const T=TIPOS[x.tipo]; let an=T.anexo;
+      if(an==='III/V'){an=fr>=.28?'III':'V'; r.frMin=r.frMin===null?fr:Math.min(r.frMin,fr); r.frMax=r.frMax===null?fr:Math.max(r.frMax,fr)}
+      const e=efetiva(an,rbt), A=ANEXOS[an], row=A.rows[e.k];
+      const rate={}; A.cols.forEach((c,j)=>rate[c]=e.er*row[j]/100);
+      if(rate.ISS>0.05){const ex=rate.ISS-0.05; rate.ISS=0.05; const o=sum(Object.entries(rate).filter(([c])=>c!=='ISS').map(([,v])=>v));
+        for(const c of A.cols)if(c!=='ISS')rate[c]+=ex*rate[c]/o}
+      const pc=(1-x.pctMono)*(1-x.pctExp);
+      const f={ICMS:(1-x.pctST)*(1-x.pctExp),ISS:T.semISS?0:(1-x.pctExp),PIS:pc,COFINS:pc,IPI:1-x.pctExp};
+      let d=0;
+      for(const c of A.cols){const v=rev*rate[c]*(f[c]===undefined?1:f[c]); r.comp[c]=(r.comp[c]||0)+v; d+=v}
+      if(e.k===5){
+        if(T.merc){r.icmsForaDeb+=rev*(1-x.pctST)*(1-x.pctExp)*x.aliqICMS;r.recMercFora+=rev}
+        else if(!T.semISS){r.issFora+=rev*(1-x.pctExp)*x.aliqISS}
+      }
+      r.linhas.push({mes:i+1,nome:x.nome,rbt,fr,an,faixa:e.k+1,al:e.al,pd:e.pd,er:e.er,rev,das:d});
+    }
+  }
+  r.das=sum(Object.values(r.comp));
+  return r;
+}
+function indiretos(Y,A,P,ano,cbs,regime){
+  const imp={},memo=[],av=[];
+  const icmsBr=Math.max(0,A.icmsDeb-Y.icmsCred);
+  if(A.icmsDeb<Y.icmsCred)av.push('ICMS: créditos informados superam os débitos; saldo credor de '+brl(Y.icmsCred-A.icmsDeb)+' não aproveitado no cálculo.');
+  imp.ICMS=icmsBr; imp.ISS=A.iss; imp.IPI=Y.ipi;
+  memo.push(`ICMS = débitos − créditos = ${brl2(A.icmsDeb)} − ${brl2(Y.icmsCred)} = ${brl2(icmsBr)}  [débito = Σ receita × (1−%ST) × (1−%exp) × alíq. ICMS]`);
+  memo.push(`ISS = Σ receita de serviço × (1−%exp) × alíq. ISS = ${brl2(A.iss)}`);
+  if(Y.ipi)memo.push(`IPI líquido informado = ${brl2(Y.ipi)}`);
+  if(ano===2026){
+    const base=A.rec-A.exp-A.mono-A.icmsDeb;
+    if(regime==='presumido'){
+      imp.PIS=.0065*base; imp.COFINS=.03*base;
+      memo.push(`Base PIS/COFINS = receita − exportação − monofásico − ICMS destacado = ${brl2(A.rec)} − ${brl2(A.exp)} − ${brl2(A.mono)} − ${brl2(A.icmsDeb)} = ${brl2(base)}`);
+      memo.push(`PIS cumulativo = 0,65% × ${brl2(base)} = ${brl2(imp.PIS)};  COFINS cumulativa = 3,00% × ${brl2(base)} = ${brl2(imp.COFINS)}`);
+    }else{
+      imp.PIS=Math.max(0,.0165*(base-Y.baseCredPC)); imp.COFINS=Math.max(0,.076*(base-Y.baseCredPC));
+      memo.push(`Base PIS/COFINS = ${brl2(base)};  base de créditos informada = ${brl2(Y.baseCredPC)}`);
+      memo.push(`PIS não cumulativo = 1,65% × (${brl2(base)} − ${brl2(Y.baseCredPC)}) = ${brl2(imp.PIS)};  COFINS = 7,60% × (…) = ${brl2(imp.COFINS)}`);
+    }
+    const t=(A.rec-A.exp);
+    memo.push(`Teste 2026 (informativo, sem efeito líquido): CBS 0,9% e IBS 0,1% sobre ${brl2(t)} ≈ ${brl2(t*.009)} e ${brl2(t*.001)}, compensáveis com PIS/COFINS devidos (EC 132, ADCT art. 125; LC 214/2025). Não somado ao custo.`);
+  }else{
+    let deb=0,ibsDeb=0;
+    for(const x of Y.ativ){
+      const T=TIPOS[x.tipo],r=sum(x.m); let b=r*(1-x.pctExp);
+      if(!P.icmsIntegra){ if(T.merc)b-=r*(1-x.pctST)*(1-x.pctExp)*x.aliqICMS; else if(!T.semISS)b-=r*(1-x.pctExp)*x.aliqISS }
+      deb+=b*(1-x.red)*cbs; ibsDeb+=b*(1-x.red)*.001;
+    }
+    imp.CBS=Math.max(0,deb-cbs*Y.baseCredCBS); imp.IBS=Math.max(0,ibsDeb-.001*Y.baseCredCBS);
+    memo.push(`CBS = Σ base × (1−redução) × alíq. CBS − alíq. CBS × base de créditos = ${brl2(deb)} − ${pc4(cbs)} × ${brl2(Y.baseCredCBS)} = ${brl2(imp.CBS)}  (alíq. CBS do cenário: ${pc4(cbs)})`);
+    memo.push(`IBS 2027 (0,1%, ADCT art. 126, II) = ${brl2(ibsDeb)} − 0,1% × ${brl2(Y.baseCredCBS)} = ${brl2(imp.IBS)}  (sem compensação com CBS: ponto a confirmar na LC 214)`);
+    if(deb<cbs*Y.baseCredCBS)av.push('CBS: créditos superam débitos; saldo credor (ressarcimento) não considerado como caixa.');
+    memo.push(`Base da CBS/IBS ${P.icmsIntegra?'inclui':'exclui'} ICMS e ISS (parâmetro a confirmar). PIS/COFINS extintos a partir de 2027.`);
+  }
+  return {imp,memo,av};
+}
+function brl(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}).format(v)}
+function brl2(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2,maximumFractionDigits:2}).format(v)}
+function pc(v,d=2){return (v*100).toFixed(d).replace('.',',')+'%'}
+function pc4(v){return (v*100).toFixed(2).replace('.',',')+'%'}
+
+function fechar(nome,Y,A,imp,enc,acess,memo,extra){
+  const trib=sum(Object.values(imp)), carga=trib+enc, pes=pessoal(Y).pes;
+  const liq=A.rec-Y.compras-Y.despesas-pes-enc-trib-acess;
+  return Object.assign({nome,imp,trib,enc,carga,cargaPct:carga/A.rec,acess,liq,memo,rec:A.rec},extra||{});
+}
+function dividendos(res,Y,P,tipo){
+  const dist=Math.max(0,res.liq)*P.pctDist;
+  let limite=null,excesso=0;
+  if(!P.contabil){
+    const pres=sum(Y.ativ.map(x=>sum(x.m)*TIPOS[x.tipo].irpj));
+    let ded=0;
+    if(tipo==='presumido')ded=res.imp.IRPJ+res.imp.CSLL+(res.imp.PIS||0)+(res.imp.COFINS||0)+(res.imp.CBS||0)+(res.imp.IBS||0);
+    else ded=res.imp.IRPJ||0;
+    limite=Math.max(0,pres-ded); excesso=Math.max(0,dist-limite);
+  }
+  const mensal=dist/(12*Math.max(1,P.socios));
+  const irrf=mensal>50000?.10*dist:0;
+  res.dist=dist;res.limiteIsento=limite;res.excessoTrib=excesso;res.irrfDiv=irrf;res.liqPos=res.liq-irrf;
+  res.memo.push(`Distribuição = ${pc(P.pctDist,0)} × resultado líquido = ${brl2(dist)}; por sócio/mês = ${brl2(mensal)}; IRRF 10% se > R$ 50.000/mês (Lei 15.270/2025) = ${brl2(irrf)}`+
+    (limite!==null?`\nLimite isento sem escrituração contábil completa = receita × presunção − tributos dedutíveis = ${brl2(limite)}; excesso ${brl2(excesso)} (sujeito a IRPF na tabela progressiva, NÃO calculado)`:''));
+  return res;
+}
+function calcPresumido(Y,A,P,ano,cbs){
+  const ind=indiretos(Y,A,P,ano,cbs,'presumido'); const imp=Object.assign({},ind.imp); const memo=ind.memo.slice();
+  let irpj=0,csll=0;
+  for(let q=0;q<4;q++){
+    let bI=0,bC=0;
+    for(const x of Y.ativ){const T=TIPOS[x.tipo],rq=sum(x.m.slice(q*3,q*3+3)); bI+=rq*T.irpj; bC+=rq*T.csll}
+    const ad=.10*Math.max(0,bI-60000);
+    irpj+=.15*bI+ad; csll+=.09*bC;
+    memo.push(`T${q+1}: base IRPJ = Σ receita × presunção = ${brl2(bI)};  IRPJ = 15% × base + 10% × (base − 60.000) = ${brl2(.15*bI)} + ${brl2(ad)};  base CSLL = ${brl2(bC)};  CSLL = 9% × base = ${brl2(.09*bC)}`);
+  }
+  imp.IRPJ=irpj; imp.CSLL=csll;
+  const p=pessoal(Y);
+  memo.push(`Encargos patronais fora da guia única: 20% × (salários + pró-labore) + (RAT + terceiros) × salários = ${brl2(.20*(Y.sal+Y.prol))} + ${brl2((Y.rat+Y.terc)*Y.sal)} = ${brl2(p.encReg)}`);
+  const r=fechar('presumido',Y,A,imp,p.encReg,Y.acess.presumido,memo);
+  r.av=ind.av; return dividendos(r,Y,P,'presumido');
+}
+function calcReal(Y,A,P,ano,cbs){
+  const ind=indiretos(Y,A,P,ano,cbs,'real'); const imp=Object.assign({},ind.imp); const memo=ind.memo.slice();
+  const p=pessoal(Y); const indSum=sum(Object.values(ind.imp));
+  const lr=A.rec-indSum-Y.compras-Y.despesas-p.pes-p.encReg+Y.adicoes;
+  memo.push(`Lucro antes do IRPJ = receita − tributos indiretos líquidos − compras − despesas − pessoal − encargos + adições/exclusões = ${brl2(A.rec)} − ${brl2(indSum)} − ${brl2(Y.compras)} − ${brl2(Y.despesas)} − ${brl2(p.pes)} − ${brl2(p.encReg)} + ${brl2(Y.adicoes)} = ${brl2(lr)}`);
+  const comp=Math.min(Y.prejuizo,.30*Math.max(0,lr)); const base=Math.max(0,lr-comp);
+  memo.push(`Compensação de prejuízo (limite 30% do lucro) = ${brl2(comp)};  base = ${brl2(base)}`);
+  imp.IRPJ=.15*base+.10*Math.max(0,base-240000); imp.CSLL=.09*base;
+  memo.push(`IRPJ = 15% × ${brl2(base)} + 10% × (${brl2(base)} − 240.000) = ${brl2(imp.IRPJ)};  CSLL = 9% × ${brl2(base)} = ${brl2(imp.CSLL)}`);
+  const r=fechar('real',Y,A,imp,p.encReg,Y.acess.real,memo); r.av=ind.av; r.lr=lr;
+  return dividendos(r,Y,P,'real');
+}
+function montaSimples(Y,A,P,S,hibrido,cbs,ano){
+  const memo=[]; const imp=Object.assign({},S.comp);
+  const tot=sum(Y.ativ.map(x=>TIPOS[x.tipo].merc?sum(x.m):0));
+  const sh=tot>0?S.recMercFora/tot:0;
+  const icmsF=Math.max(0,S.icmsForaDeb-Y.icmsCred*sh);
+  let cabe='';
+  if(S.recMercFora>0||S.issFora>0){imp.ICMS_fora_DAS=(imp.ICMS_fora_DAS||0)+icmsF; imp.ISS_fora_DAS=S.issFora;
+    cabe=`RBT12 acima de R$ 3,6 mi em parte do ano: ICMS/ISS recolhidos fora do DAS (LC 123, arts. 19-20). ICMS fora = ${brl2(S.icmsForaDeb)} − créditos proporcionais ${brl2(Y.icmsCred*sh)} = ${brl2(icmsF)}; ISS fora = ${brl2(S.issFora)}`;}
+  memo.push('DAS por componente (partilha dos Anexos × alíquota efetiva), ver tabela mensal. DAS = Σ receita × [(RBT12 × alíq. nominal − PD) ÷ RBT12] × % do componente');
+  if(cabe)memo.push(cabe);
+  const p=pessoal(Y); const temIV=Y.ativ.some(x=>TIPOS[x.tipo].anexo==='IV');
+  const enc=temIV?p.encIV:0;
+  if(temIV)memo.push(`Anexo IV: CPP patronal fora do DAS = 20% × (salários + pró-labore) + RAT × salários = ${brl2(enc)}`);
+  let extraMemo=[];
+  if(hibrido){
+    const pcDas=(imp.PIS||0)+(imp.COFINS||0); delete imp.PIS; delete imp.COFINS;
+    const ind=indiretos(Y,A,P,2027,cbs,'real');
+    imp.CBS=ind.imp.CBS; imp.IBS=ind.imp.IBS;
+    memo.push(`Híbrido: retira do DAS a parcela PIS/COFINS (=CBS na partilha de 2027) de ${brl2(pcDas)} e recolhe CBS/IBS pelo regime regular (não cumulativo).`);
+    memo.push(...ind.memo.filter(l=>/^(CBS|IBS|Base da)/.test(l)));
+  }
+  const nome=hibrido?'hibrido':'simples';
+  const r=fechar(nome,Y,A,imp,enc,hibrido?Y.acess.hibrido:Y.acess.simples,memo);
+  r.dasTotal=sum(Object.entries(imp).filter(([k])=>!/fora_DAS|CBS$|IBS$/.test(k)||k==='CBS'&&!hibrido).map(([,v])=>v));
+  return dividendos(r,Y,P,'simples');
+}
+function avaliarAno(N,ano,cbs){
+  const Y=N.anos[ano], P=N.P; const A=agg(Y);
+  const hr=ano===2026?N.hist.rec:N.anos[2026].ativ.length?[...Array(12)].map((_,i)=>sum(N.anos[2026].ativ.map(x=>x.m[i]))):N.hist.rec;
+  const hf=ano===2026?N.hist.fol:N.anos[2026].folhaFR;
+  const S=calcSimples(Y,hr,hf);
+  const out={A,S};
+  if(S.inel||A.rec>LIM){out.simples=null;out.hibrido=null;out.inelMotivo=S.inel?'RBT12 acima de R$ 4,8 mi em algum mês':'receita do ano acima de R$ 4,8 mi'}
+  else{
+    out.simples=montaSimples(Y,A,P,S,false,cbs,ano);
+    out.hibrido=ano===2027?montaSimples(Y,A,P,S,true,cbs,ano):null;
+  }
+  out.presumido=calcPresumido(Y,A,P,ano,cbs);
+  out.real=calcReal(Y,A,P,ano,cbs);
+  return out;
+}
+function avaliar(N){
+  const R={2026:avaliarAno(N,2026,0),2027:{}};
+  for(const k of Object.keys(N.P.cbs))R[2027][k]=avaliarAno(N,2027,N.P.cbs[k]);
+  return R;
+}
+function escalar(N,kr,kc){
+  const C=JSON.parse(JSON.stringify(N));
+  C.hist.rec=C.hist.rec.map(v=>v*kr); C.hist.fol=C.hist.fol.map(v=>v*kr);
+  for(const a of [2026,2027]){const Y=C.anos[a];
+    Y.ativ.forEach(x=>x.m=x.m.map(v=>v*kr));
+    Y.folhaFR=Y.folhaFR.map(v=>v*kr); Y.sal*=kr; Y.prol*=kr;
+    for(const f of ['compras','icmsCred','baseCredPC','baseCredCBS','despesas'])Y[f]*=kr*kc;
+  }
+  return C;
+}
+function vetor(R){return {simples:R.simples?R.simples.liq:null,hibrido:R.hibrido?R.hibrido.liq:null,presumido:R.presumido.liq,real:R.real.liq}}
+function varrer(N,ano,modo){
+  const cb=N.P.cbs.base, pts=[];
+  const n=40;
+  for(let i=0;i<=n;i++){
+    const t=i/n;
+    const kr=modo==='rec'?.4+1.2*t:1, kc=modo==='cus'?.6+.8*t:1;
+    const C=escalar(N,kr,kc);
+    const R=avaliarAno(C,ano,ano===2026?0:cb);
+    const rec=R.A.rec, Y=C.anos[ano], p=pessoal(Y);
+    const marg=(rec-Y.compras-Y.despesas-p.pes)/rec;
+    pts.push({x:modo==='rec'?rec:marg,v:vetor(R),k:modo==='rec'?kr:kc});
+  }
+  return pts;
+}
+function cruzamentos(pts,xfmt){
+  const nomes=['simples','hibrido','presumido','real'],out=[];
+  for(let a=0;a<4;a++)for(let b=a+1;b<4;b++){
+    const A=nomes[a],B=nomes[b];
+    for(let i=1;i<pts.length;i++){
+      const p0=pts[i-1],p1=pts[i]; if(p0.v[A]==null||p0.v[B]==null||p1.v[A]==null||p1.v[B]==null)continue;
+      const d0=p0.v[A]-p0.v[B], d1=p1.v[A]-p1.v[B];
+      if(d0===0||d0*d1<0){const t=d0/(d0-d1); const x=p0.x+t*(p1.x-p0.x);
+        out.push({a:A,b:B,x,antes:d0>0?A:B,depois:d1>0?A:B});break}
+    }
+  }
+  return out;
+}
+//CALC_END
+</script>
+
+<script>
+/* ===================== ESTADO E INTERFACE ===================== */
+const MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function exemploAtiv(a){return a}
+function exemplo(){
+  const mk=(nome,tipo,anual,extra)=>Object.assign({nome,tipo,anual,mensal:'',aliqICMS:0,aliqISS:0,pctST:0,pctMono:0,pctExp:0,pctB2B:50,red:0},extra||{});
+  const y=(f,tag)=>({
+    ativ:[mk('Revenda de mercadorias','comercio',1800000*f,{aliqICMS:18,pctB2B:60}),mk('Serviços técnicos','serv_fr',1200000*f,{aliqISS:3,pctB2B:70})],
+    salarios:480000*f,prolabore:120000,rat:1,terc:5.8,
+    compras:1100000*f,icmsCred:150000*f,baseCredPC:1000000*f,baseCredCBS:1150000*f,despesas:400000*f,adicoes:0,prejuizo:0,ipi:0,
+    acess:{simples:18000,hibrido:30000,presumido:36000,real:72000}});
+  return {example:true,socios:2,pctDist:100,contabil:true,icmsIntegra:true,
+    cbs:{baixo:8.2,base:8.8,alto:9.3},
+    histRec:2700000,histRecMensal:'',histFolha:580000,
+    anos:{2026:y(1),2027:y(1.10)}};
+}
+let S=null;
+try{const sv=localStorage.getItem('planej_v1');if(sv)S=JSON.parse(sv)}catch(e){}
+if(!S||!S.anos)S=exemplo();
+let ui={tab:'res',cen:'base',anoEq:2027,modoEq:'rec'};
+
+function meses12(txt,anual){
+  const v=(txt||'').split(/[\s;]+/).filter(Boolean).map(s=>parseFloat(s.replace(',','.'))).filter(n=>!isNaN(n));
+  return v.length===12?v:Array(12).fill(anual/12);
+}
+function norm(S){
+  const N={P:{socios:+S.socios||1,pctDist:(+S.pctDist||0)/100,contabil:!!S.contabil,icmsIntegra:!!S.icmsIntegra,cbs:{}},hist:{},anos:{}};
+  for(const k of ['baixo','base','alto'])N.P.cbs[k]=(+S.cbs[k]||0)/100;
+  N.hist.rec=meses12(S.histRecMensal,+S.histRec||0);
+  N.hist.fol=Array(12).fill((+S.histFolha||0)/12);
+  for(const a of [2026,2027]){
+    const y=S.anos[a];
+    const Y={ativ:y.ativ.map(x=>({nome:x.nome||'Atividade',tipo:x.tipo,m:meses12(x.mensal,+x.anual||0),
+        aliqICMS:(+x.aliqICMS||0)/100,aliqISS:(+x.aliqISS||0)/100,pctST:(+x.pctST||0)/100,pctMono:(+x.pctMono||0)/100,pctExp:(+x.pctExp||0)/100,pctB2B:(+x.pctB2B||0)/100,red:(+x.red||0)/100})),
+      sal:+y.salarios||0,prol:+y.prolabore||0,rat:(+y.rat||0)/100,terc:(+y.terc||0)/100,
+      compras:+y.compras||0,icmsCred:+y.icmsCred||0,baseCredPC:+y.baseCredPC||0,baseCredCBS:+y.baseCredCBS||0,despesas:+y.despesas||0,
+      adicoes:+y.adicoes||0,prejuizo:+y.prejuizo||0,ipi:+y.ipi||0,
+      acess:{simples:+y.acess.simples||0,hibrido:+y.acess.hibrido||0,presumido:+y.acess.presumido||0,real:+y.acess.real||0}};
+    Y.folhaFR=Array(12).fill((Y.sal+Y.prol+.08*Y.sal)/12);
+    N.anos[a]=Y;
+  }
+  return N;
+}
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let N=null,R=null;
+
+function calcular(){
+  N=norm(S); R=avaliar(N);
+  try{localStorage.setItem('planej_v1',JSON.stringify(S))}catch(e){}
+  $('#exBanner').hidden=!S.example;
+  renderRes();renderEq();renderMemo();renderRisk();
+}
+
+/* ---------- Conclusão ---------- */
+function ranking(r){
+  return ['simples','hibrido','presumido','real'].filter(k=>r[k]).map(k=>r[k]).sort((a,b)=>b.liq-a.liq);
+}
+function linhaTabela(rk,x,win){
+  const imp=x.imp;
+  return `<tr class="${win?'win':''}"><td>${REG[x.nome]}</td><td class="n">${brl(x.trib)}</td><td class="n">${brl(x.enc)}</td><td class="n">${brl(x.carga)}</td><td class="n">${pc(x.cargaPct)}</td><td class="n">${brl(x.acess)}</td><td class="n">${brl(x.liq)}</td><td class="n">${brl(x.irrfDiv)}</td><td class="n">${brl(x.liqPos)}</td></tr>`;
+}
+function tabelaAno(r,ano){
+  const rk=ranking(r); const w=rk[0];
+  let h=`<div class="scroll"><table><thead><tr><th>Regime</th><th>Tributos</th><th>Encargos patronais</th><th>Carga total</th><th>% receita</th><th>Obrig. acessórias</th><th>Resultado líquido</th><th>IRRF dividendos</th><th>Líquido após IRRF</th></tr></thead><tbody>`;
+  for(const k of ['simples','hibrido','presumido','real']){
+    if(!r[k]){ if(k==='hibrido'&&ano===2026)continue; h+=`<tr class="out"><td>${REG[k]}</td><td colspan="8" style="text-align:left">Indisponível${r.inelMotivo&&k!=='presumido'&&k!=='real'?': '+esc(r.inelMotivo):''}</td></tr>`;continue}
+    h+=linhaTabela(rk,r[k],r[k]===w);
+  }
+  return h+'</tbody></table></div>';
+}
+function condicoes(r,ano){
+  const L=[]; const Y=N.anos[ano], A=r.A;
+  L.push(`Receita bruta do ano: ${brl(A.rec)}; RBT12 máximo no ano: ${brl(r.S.rbtMax)} (limite Simples R$ 4.800.000; sublimite ICMS/ISS R$ 3.600.000).`);
+  if(r.S.frMin!==null)L.push(`Fator r (folha 12m ÷ RBT12) entre ${pc(r.S.frMin)} e ${pc(r.S.frMax)}: ${r.S.frMax>=.28?'atinge 28% em parte do período (Anexo III)':'abaixo de 28% (Anexo V)'}.`);
+  const b2b=sum(Y.ativ.map(x=>sum(x.m)*x.pctB2B))/A.rec;
+  if(ano===2027)L.push(`Participação B2B informada: ${pc(b2b,0)} da receita. Cliente contribuinte só toma o crédito de CBS/IBS embutido no DAS se você estiver no Simples comum; no híbrido o crédito é integral.`);
+  if(A.rec>LIM)L.push('Receita acima do limite do Simples: permanência inviável.');
+  return L;
+}
+function credCli(r,ano){
+  if(ano!==2027||!r.simples||!r.hibrido)return null;
+  const Y=N.anos[2027]; const cb=N.P.cbs[ui.cen];
+  let simples=0,reg=0;
+  const pcDas=(r.simples.imp.PIS||0)+(r.simples.imp.COFINS||0);
+  const tot=r.A.rec;
+  for(const x of Y.ativ){const rv=sum(x.m); const sh=rv/tot; simples+=pcDas*sh*x.pctB2B; reg+=rv*(1-x.pctExp)*(1-x.red)*cb*x.pctB2B}
+  return {simples,reg};
+}
+function renderRes(){
+  const rr=[2026,2027]; let h='';
+  const winners=[];
+  h+=`<h2>1. Conclusão recomendada</h2>`;
+  h+=`<div class="banner warn" id="prazo"></div>`;
+  h+=`<div class="reco">`;
+  const r26=R[2026];
+  const cenKeys=Object.keys(R[2027]);
+  const w26=ranking(r26);
+  const cardAno=(ano,r,extra)=>{
+    const rk=ranking(r),w=rk[0],seg=rk[1],sim=r.simples;
+    const dif=seg?w.liq-seg.liq:0;
+    let t=`<div class="card"><div class="k">Exercício ${ano}${ano===2027?' · cenário CBS '+ui.cen:''}</div><div class="big">${REG[w.nome]}</div>`;
+    t+=`<p class="num">Resultado líquido ${brl(w.liq)} · carga ${pc(w.cargaPct)} da receita</p>`;
+    if(seg)t+=`<p>Vantagem sobre ${REG[seg.nome]}: <strong class="num">${brl(dif)}</strong> (${pc(dif/r.A.rec)} da receita).</p>`;
+    if(sim&&w.nome!=='simples')t+=`<p>Ganho frente ao Simples comum: <strong class="num">${brl(w.liq-sim.liq)}</strong>.</p>`;
+    if(w.nome==='simples')t+=`<p><span class="tag good">Permanecer</span>O Simples comum tem o maior resultado líquido neste cenário.</p>`;
+    else t+=`<p><span class="tag warn">Migrar</span>${REG[w.nome]} supera o Simples comum neste cenário.</p>`;
+    if(r.inelMotivo)t+=`<p><span class="tag bad">Simples inviável</span>${esc(r.inelMotivo)}.</p>`;
+    t+=`<ul class="tight small">${condicoes(r,ano).map(l=>'<li>'+esc(l)+'</li>').join('')}</ul></div>`;
+    return t;
+  };
+  h+=cardAno(2026,r26);
+  h+=cardAno(2027,R[2027][ui.cen]);
+  h+=`</div>`;
+  // robustez
+  const ws=cenKeys.map(k=>ranking(R[2027][k])[0].nome);
+  const igual=ws.every(x=>x===ws[0]);
+  h+=`<div class="banner ${igual?'ok':'bad'}" style="margin-top:16px"><strong>2027 e a alíquota da CBS:</strong> `+
+    (igual?`o regime vencedor (${REG[ws[0]]}) é o mesmo nos três cenários de alíquota (${cenKeys.map(k=>pc4(N.P.cbs[k])).join(', ')}). A conclusão não depende do valor ainda pendente.`
+          :`o vencedor muda conforme a alíquota: ${cenKeys.map((k,i)=>pc4(N.P.cbs[k])+' → '+REG[ws[i]]).join('; ')}. Decisão sensível à alíquota de referência (pendente).`)+`</div>`;
+  // robustez de ±10%
+  const rb=[];
+  for(const [kr,kc,lab] of [[.9,1,'receita −10%'],[1.1,1,'receita +10%'],[1,.9,'custos −10%'],[1,1.1,'custos +10%']]){
+    const C=escalar(N,kr,kc),x=avaliarAno(C,2027,N.P.cbs.base);rb.push([lab,ranking(x)[0].nome]);
+  }
+  const base27=ranking(R[2027].base)[0].nome;
+  h+=`<p class="small">Teste de estabilidade (2027, cenário base): ${rb.map(([l,n])=>l+' → '+REG[n]).join('; ')}. ${rb.every(([,n])=>n===base27)?'O vencedor se mantém em todas as variações.':'O vencedor muda em pelo menos uma variação: a margem de segurança é curta.'}</p>`;
+  // cliente
+  h+=`<h2 style="margin-top:28px">2. Comparação de carga e resultado</h2>`;
+  h+=`<h3>2026</h3>`+tabelaAno(r26,2026);
+  h+=`<p class="small">Em 2026 a CBS (0,9%) e o IBS (0,1%) são apenas teste, compensados com PIS/COFINS; o Simples fica dispensado. Mudar de regime para 2026 já não é possível (opções vencidas em janeiro): leia 2026 como aferição do que teria sido.</p>`;
+  h+=`<h3>2027</h3><div class="seg" id="segCen">${cenKeys.map(k=>`<button data-c="${k}" aria-pressed="${k===ui.cen}">CBS ${pc4(N.P.cbs[k])} (${k})</button>`).join('')}</div>`+tabelaAno(R[2027][ui.cen],2027);
+  const cc=credCli(R[2027][ui.cen],2027);
+  if(cc)h+=`<p>Crédito de CBS que seus clientes B2B tomariam em 2027: <strong class="num">${brl(cc.simples)}</strong> no Simples comum (parcela da CBS embutida no DAS) contra <strong class="num">${brl(cc.reg)}</strong> no híbrido (crédito integral). A diferença de ${brl(cc.reg-cc.simples)} é o argumento comercial do híbrido; o programa não presume que ela vire receita adicional, pois depende da sua política de preços.</p>`;
+  h+=`<p class="small">Resultado líquido = receita − compras − despesas − pessoal (salários, pró-labore, FGTS) − encargos patronais − tributos − custo de obrigações acessórias, antes do IRPF dos sócios. IRRF sobre dividendos conforme Lei 15.270/2025 (parâmetro). Fórmulas e dados de cada linha estão na aba “Memória de cálculo”.</p>`;
+  $('#p-res').innerHTML=h;
+  const hoje=new Date();
+  $('#prazo').innerHTML=`<strong>Prazos (hoje, ${hoje.toLocaleDateString('pt-BR')}):</strong> a saída do Simples para vigorar em 01/01/2027 deve ser comunicada até 31/01/2027 (LC 123, art. 30, §1º, I e art. 31). A opção pelo Lucro Presumido se faz com o primeiro pagamento de IRPJ do ano e é irretratável no ano (Lei 9.718/1998, art. 13). A opção do Simples pelo regime regular de IBS/CBS depende de regulamento do CGSN: <em>confirme o prazo vigente, pois pode vencer antes de janeiro</em>.`;
+  document.querySelectorAll('#segCen button').forEach(b=>b.onclick=()=>{ui.cen=b.dataset.c;renderRes()});
+}
+
+/* ---------- Equilíbrio ---------- */
+function chart(pts,xlab,xfmt,marker){
+  const W=640,H=330,L=74,Rr=96,T=14,B=46;
+  const keys=['simples','hibrido','presumido','real'];
+  const cor={simples:'var(--c1)',hibrido:'var(--c2)',presumido:'var(--c3)',real:'var(--c4)'};
+  const dash={simples:'',hibrido:'7 4',presumido:'2 3',real:'10 3 2 3'};
+  let ys=[];pts.forEach(p=>keys.forEach(k=>{if(p.v[k]!=null)ys.push(p.v[k])}));
+  let y0=Math.min(...ys),y1=Math.max(...ys); const pad=(y1-y0)*.06||1; y0-=pad;y1+=pad;
+  const x0=pts[0].x,x1=pts[pts.length-1].x;
+  const X=v=>L+(v-x0)/(x1-x0)*(W-L-Rr), Y=v=>T+(1-(v-y0)/(y1-y0))*(H-T-B);
+  let s=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Resultado líquido por regime">`;
+  for(let i=0;i<=4;i++){const v=y0+(y1-y0)*i/4,y=Y(v);s+=`<line class="ax" x1="${L}" x2="${W-Rr}" y1="${y}" y2="${y}"/><text x="${L-6}" y="${y+4}" text-anchor="end">${brlK(v)}</text>`}
+  for(let i=0;i<=4;i++){const v=x0+(x1-x0)*i/4,x=X(v);s+=`<text x="${x}" y="${H-B+16}" text-anchor="middle">${xfmt(v)}</text>`}
+  s+=`<text x="${(L+W-Rr)/2}" y="${H-6}" text-anchor="middle">${xlab}</text>`;
+  if(marker!=null&&marker>=x0&&marker<=x1)s+=`<line x1="${X(marker)}" x2="${X(marker)}" y1="${T}" y2="${H-B}" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 3"/><text x="${X(marker)+4}" y="${T+10}">hoje</text>`;
+  for(const k of keys){
+    let d='',last=null,first=true;
+    pts.forEach(p=>{if(p.v[k]==null){first=true;return}d+=(first?'M':'L')+X(p.x).toFixed(1)+' '+Y(p.v[k]).toFixed(1)+' ';first=false;last=p});
+    if(!d)continue;
+    s+=`<path d="${d}" fill="none" stroke="${cor[k]}" stroke-width="2.4" ${dash[k]?`stroke-dasharray="${dash[k]}"`:''}/>`;
+    if(last)s+=`<text class="lab" x="${X(last.x)+6}" y="${Y(last.v[k])+4}" style="fill:${cor[k]}">${{simples:'Simples',hibrido:'Híbrido',presumido:'Presumido',real:'Real'}[k]}</text>`;
+  }
+  return s+'</svg>';
+}
+function brlK(v){return (v<0?'−':'')+'R$ '+(Math.abs(v)/1000).toLocaleString('pt-BR',{maximumFractionDigits:0})+' mil'}
+function renderEq(){
+  const ano=ui.anoEq,modo=ui.modoEq;
+  const pts=varrer(N,ano,modo);
+  const cr=cruzamentos(pts);
+  const marker=modo==='rec'?agg(N.anos[ano]).rec:(()=>{const Y=N.anos[ano],A=agg(Y);return (A.rec-Y.compras-Y.despesas-pessoal(Y).pes)/A.rec})();
+  const xf=modo==='rec'?v=>'R$ '+(v/1e6).toFixed(2).replace('.',',')+' mi':v=>pc(v,0);
+  const xl=modo==='rec'?'Receita bruta anual (custos, folha e créditos proporcionais)':'Margem antes dos tributos (variando compras e despesas)';
+  let h=`<h2>3. Ponto de equilíbrio entre regimes</h2>`;
+  h+=`<div class="row"><div class="seg" id="segAno">${[2026,2027].map(a=>`<button data-a="${a}" aria-pressed="${a===ano}">${a}</button>`).join('')}</div>`+
+     `<div class="seg" id="segModo"><button data-m="rec" aria-pressed="${modo==='rec'}">Por faturamento</button><button data-m="cus" aria-pressed="${modo==='cus'}">Por margem</button></div></div>`;
+  h+=`<div class="card">${chart(pts,xl,xf,marker)}<div class="leg"><span><i style="border-color:var(--c1)"></i>Simples</span>${ano===2027?`<span><i style="border-color:var(--c2);border-top-style:dashed"></i>Híbrido</span>`:''}<span><i style="border-color:var(--c3);border-top-style:dotted"></i>Presumido</span><span><i style="border-color:var(--c4);border-top-style:dashed"></i>Real</span></div>`;
+  h+=`<p class="small">${modo==='rec'?'Receita, compras, créditos, despesas e folha variam juntos na mesma proporção (premissa do modelo); obrigações acessórias ficam fixas. RBT12 e fator r acompanham a escala.':'A receita fica fixa; compras, créditos e despesas variam para mudar a margem.'} ${ano===2027?'Cenário CBS base.':''} A linha do Simples termina onde a receita passa de R$ 4,8 mi.</p></div>`;
+  h+=`<h3>Cruzamentos encontrados</h3>`;
+  const rel=cr.filter(c=>ano===2027||(c.a!=='hibrido'&&c.b!=='hibrido'));
+  if(!rel.length)h+=`<p>Nenhuma troca de posição entre os regimes na faixa analisada: a ordem atual se mantém.</p>`;
+  else h+=`<ul class="tight">${rel.map(c=>`<li>${REG[c.a]} × ${REG[c.b]}: equilíbrio em ${modo==='rec'?brl(c.x):pc(c.x)}. Abaixo desse ponto o melhor dos dois é ${REG[c.antes]}; acima, ${REG[c.depois]}.</li>`).join('')}</ul>`;
+  h+=`<p class="small">Equilíbrio obtido por interpolação linear entre 41 pontos de simulação. Para o valor exato no seu caso, ajuste os dados e confira na aba “Memória de cálculo”.</p>`;
+  $('#p-eq').innerHTML=h;
+  document.querySelectorAll('#segAno button').forEach(b=>b.onclick=()=>{ui.anoEq=+b.dataset.a;renderEq()});
+  document.querySelectorAll('#segModo button').forEach(b=>b.onclick=()=>{ui.modoEq=b.dataset.m;renderEq()});
+}
+
+/* ---------- Memória ---------- */
+function memoSimples(r,ano){
+  let h=`<div class="scroll"><table><thead><tr><th>Mês</th><th>Atividade</th><th>RBT12</th><th>Fator r</th><th>Anexo/faixa</th><th>Alíq. nom.</th><th>PD</th><th>Alíq. efetiva</th><th>Receita</th><th>DAS</th></tr></thead><tbody>`;
+  for(const l of r.S.linhas)h+=`<tr><td>${MES[l.mes-1]}</td><td>${esc(l.nome)}</td><td class="n">${brl(l.rbt)}</td><td class="n">${pc(l.fr)}</td><td>${l.an}/${l.faixa}</td><td class="n">${pc(l.al,1)}</td><td class="n">${brl(l.pd)}</td><td class="n">${pc(l.er)}</td><td class="n">${brl(l.rev)}</td><td class="n">${brl(l.das)}</td></tr>`;
+  return h+`</tbody></table></div><p class="small">Alíquota efetiva = (RBT12 × alíq. nominal − PD) ÷ RBT12 (LC 123, art. 18, §1º). DAS do mês = receita × alíquota efetiva, com exclusões de ST, monofásico, exportação e ISS de locação. Fator r = folha dos 12 meses anteriores ÷ RBT12 (≥ 28% → Anexo III).</p>`;
+}
+function renderMemo(){
+  let h=`<h2>4. Memória de cálculo</h2><p class="sub">Cada linha traz a fórmula com os dados usados, para você refazer a conta. Valores em reais, sem arredondamento intermediário.</p>`;
+  const blocos=[[2026,R[2026]],[2027,R[2027][ui.cen]]];
+  for(const [ano,r] of blocos){
+    h+=`<h3>${ano}${ano===2027?' · CBS '+pc4(N.P.cbs[ui.cen]):''}</h3>`;
+    for(const k of ['simples','hibrido','presumido','real']){
+      const x=r[k]; if(!x)continue;
+      const impl=Object.entries(x.imp).filter(([,v])=>v).map(([n,v])=>`${n.replace('_',' ')}: ${brl2(v)}`).join('\n');
+      h+=`<details><summary>${REG[x.nome]} · ${brl(x.liq)} líquido</summary><div>`;
+      if(k==='simples'||k==='hibrido')h+=memoSimples(r,ano);
+      h+=`<h3>Tributos por componente</h3><pre class="memo">${esc(impl)}\nEncargos patronais fora da guia: ${brl2(x.enc)}\nObrigações acessórias (informado): ${brl2(x.acess)}</pre>`;
+      h+=`<h3>Fórmulas e dados</h3><pre class="memo">${esc(x.memo.join('\n\n'))}</pre>`;
+      h+=`<h3>Resultado</h3><pre class="memo">${esc(`Resultado líquido = receita − compras − despesas − pessoal − encargos − tributos − acessórias\n= ${brl2(x.rec)} − ${brl2(N.anos[ano].compras)} − ${brl2(N.anos[ano].despesas)} − ${brl2(pessoal(N.anos[ano]).pes)} − ${brl2(x.enc)} − ${brl2(x.trib)} − ${brl2(x.acess)}\n= ${brl2(x.liq)}`)}</pre></div></details>`;
+    }
+  }
+  $('#p-memo').innerHTML=h;
+}
+
+/* ---------- Riscos ---------- */
+const LEGAL=[
+ ['LC 123/2006 com LC 155/2016 (Anexos I–V, art. 3º, 18, 19, 20)','Alíquotas, partilha, limite de R$ 4,8 mi e sublimite de R$ 3,6 mi para ICMS/ISS','Vigente','Baixa'],
+ ['LC 123/2006, art. 18, §§5º-J a 5º-M','Fator r (28%) e Anexo IV com CPP fora do DAS','Vigente','Baixa'],
+ ['Lei 9.249/1995 (arts. 3º, 15, 20, 10); Lei 9.430/1996 (art. 1º, 25)','Presunção, adicional de 10%, CSLL, regra de dividendos isentos','Vigente','Baixa'],
+ ['Lei 9.718/1998, art. 13','Opção pelo Presumido, irretratável no ano','Vigente','Baixa'],
+ ['Lei 12.973/2014; Leis 10.637/2002 e 10.833/2003; Lei 9.065/1995','Lucro Real, PIS/COFINS não cumulativos até 2026, trava de 30% de prejuízo','Vigente','Baixa'],
+ ['STF, RE 574.706 (Tema 69)','ICMS fora da base do PIS/COFINS','Vigente. ISS na base: situação a confirmar (modelo mantém ISS na base)','Média'],
+ ['EC 132/2023, ADCT arts. 125–133','Teste 2026 (CBS 0,9%, IBS 0,1%), CBS plena e IBS 0,1% em 2027–2028, ICMS/ISS até 2032','Vigente; cronograma fixado','Baixa'],
+ ['LC 214/2025 (e alterações posteriores, a confirmar)','Regime regular de IBS/CBS, créditos, reduções de alíquota, opção do Simples pelo regime regular','Vigente; regulamentos complementares em andamento','Média'],
+ ['Resolução do Senado / cálculo do TCU para alíquota de referência da CBS 2027','Valor da alíquota usada nos cenários A/B/C','Pendente: os 3 valores do programa são hipóteses suas, não norma','Alta'],
+ ['LC 123 alterada pela LC 214 e Resolução CGSN','Prazo e forma da opção do Simples pelo regime regular (híbrido); partilha da CBS no DAS em 2027','Regulamentação a confirmar','Alta'],
+ ['LC 214/2025 e EC 132','Se ICMS/ISS integram a base da CBS/IBS na transição (parâmetro no programa)','A confirmar no texto vigente','Média'],
+ ['LC 214/2025 e EC 132','IPI zerado em 2027 salvo produtos concorrentes com a Zona Franca (campo “IPI líquido” é manual)','A confirmar por produto','Média'],
+ ['Lei 15.270/2025','IRRF de 10% sobre dividendos acima de R$ 50 mil/mês por sócio; IRPF mínimo (não modelado)','Vigente a partir de 2026; regulamento da RFB a acompanhar','Média'],
+ ['Lei 14.973/2024','Reoneração gradual da CPRB e da folha de setores desonerados (não modelada)','Vigente; checar se sua atividade era desonerada','Média']
+];
+function renderRisk(){
+  let h=`<h2>5. Riscos, premissas e pontos dependentes de atualização legal</h2>`;
+  const av=[];
+  for(const a of [2026,2027]){const Y=N.anos[a];
+    if(!Y.acess.simples&&!Y.acess.presumido&&!Y.acess.real)av.push(`${a}: custo de obrigações acessórias não informado (zero). Presumido e Real ficam favorecidos artificialmente.`);
+    if(!Y.baseCredPC&&a===2026)av.push('2026: base de créditos de PIS/COFINS zerada. O Lucro Real perde o benefício central do regime.');
+    if(!Y.baseCredCBS&&a===2027)av.push('2027: base de créditos de CBS/IBS zerada. Presumido, Real e híbrido ficam sem créditos.');
+  }
+  for(const a of [2026,2027]){const r=a===2026?R[2026]:R[2027][ui.cen];
+    [r.presumido,r.real,r.simples,r.hibrido].forEach(x=>x&&x.av&&x.av.forEach(m=>av.push(a+': '+m)));
+    if(r.inelMotivo)av.push(a+': '+r.inelMotivo+'.');
+  }
+  if(!TABELAS_OK)av.push('Alerta interno: alguma linha de partilha não soma 100%. Não use os resultados.');
+  h+=`<h3>Alertas dos seus dados</h3>`+(av.length?`<ul class="tight">${[...new Set(av)].map(m=>`<li>${esc(m)}</li>`).join('')}</ul>`:'<p>Nenhum alerta automático.</p>');
+  h+=`<h3>Premissas que você precisa confirmar</h3><ul class="tight">
+  <li>A empresa não incorre em vedação do Simples (LC 123, art. 17) e não tem sócio pessoa jurídica ou participação que a desenquadre. Também confira se a atividade é permitida no regime regular escolhido.</li>
+  <li>Alíquotas de ICMS e ISS informadas são as efetivas por operação; benefícios estaduais e municipais, ST e diferimento só entram pelos percentuais que você informar.</li>
+  <li>Os créditos de PIS/COFINS, ICMS e CBS/IBS são os que você informou (base e valor). O programa não verifica se o fornecedor está no regime regular nem se cada item gera crédito.</li>
+  <li>Receita financeira, ganhos de capital, retenções na fonte, incentivos fiscais (PAT, Lei Rouanet etc.), CPRB e regimes especiais não são modelados.</li>
+  <li>Lucro Real calculado em apuração anual; as estimativas mensais afetam apenas o fluxo de caixa. Lucro Presumido em apuração trimestral.</li>
+  <li>Empresa com menos de 12 meses de atividade: o cálculo proporcional de RBT12 não é feito.</li>
+  <li>Folha para o fator r = salários + pró-labore + FGTS, distribuída por igual nos 12 meses. Se tiver 13º, férias e rescisões, informe o total efetivamente pago.</li>
+  <li>Excesso de receita entre R$ 4,8 mi e R$ 5,76 mi: o programa marca o Simples como inviável em vez de simular a regra de transição do excesso.</li>
+  <li>A resposta a “vale a pena?” considera resultado líquido antes do IRPF dos sócios; dividendos acima do limite isento sem escrituração completa não têm o IRPF calculado.</li>
+  </ul>`;
+  h+=`<h3>Base legal e situação de cada norma</h3><div class="scroll"><table><thead><tr><th>Norma</th><th>Uso no cálculo</th><th>Situação</th><th>Incerteza</th></tr></thead><tbody>`+
+    LEGAL.map(l=>`<tr><td style="white-space:normal;text-align:left">${esc(l[0])}</td><td style="white-space:normal;text-align:left">${esc(l[1])}</td><td style="white-space:normal;text-align:left">${esc(l[2])}</td><td><span class="tag ${l[3]==='Alta'?'bad':l[3]==='Média'?'warn':'good'}">${l[3]}</span></td></tr>`).join('')+`</tbody></table></div>`;
+  h+=`<p class="small">Tabelas e artigos foram escritos com base no conhecimento do autor do programa até meados de 2026. Antes de decidir, confira cada item contra o texto consolidado da norma e consulte o contador responsável. Este programa é apoio ao planejamento e não substitui parecer profissional.</p>`;
+  $('#p-risk').innerHTML=h;
+}
+
+/* ---------- Formulário ---------- */
+function fld(path,label,val,type,extra){
+  type=type||'number';
+  return `<div><label for="f-${path}">${label}</label><input id="f-${path}" data-p="${path}" type="${type}" ${type==='number'?'step="any"':''} value="${esc(val===undefined?'':val)}" ${extra||''}></div>`;
+}
+function renderDados(){
+  let h=`<h2>Dados da empresa</h2><p class="sub">Informe valores anuais em reais; percentuais em pontos (18 = 18%). Quando houver sazonalidade, cole 12 valores mensais no campo opcional da atividade. Nada é preenchido por suposição: o que ficar em branco vale zero e gera alerta.</p>`;
+  h+=`<div class="card"><h3 style="margin-top:0">Parâmetros gerais</h3><div class="grid">`+
+    fld('socios','Número de sócios',S.socios)+fld('pctDist','% do lucro distribuído',S.pctDist)+
+    `<div><label for="f-contabil">Escrituração contábil completa (dividendos sem limite)</label><select id="f-contabil" data-p="contabil" data-b="1"><option value="1" ${S.contabil?'selected':''}>Sim</option><option value="0" ${!S.contabil?'selected':''}>Não</option></select></div>`+
+    `<div><label for="f-icmsIntegra">ICMS e ISS integram a base da CBS/IBS (2027)</label><select id="f-icmsIntegra" data-p="icmsIntegra" data-b="1"><option value="1" ${S.icmsIntegra?'selected':''}>Sim (confirmar na LC 214)</option><option value="0" ${!S.icmsIntegra?'selected':''}>Não</option></select></div>`+
+    `</div><h3>Alíquota da CBS em 2027 (pendente de fixação oficial: informe três hipóteses)</h3><div class="grid">`+
+    fld('cbs.baixo','Cenário baixo (%)',S.cbs.baixo)+fld('cbs.base','Cenário base (%)',S.cbs.base)+fld('cbs.alto','Cenário alto (%)',S.cbs.alto)+
+    `</div><h3>Histórico: 12 meses de 2025</h3><div class="grid">`+
+    fld('histRec','Receita bruta total 2025 (R$)',S.histRec)+fld('histFolha','Folha 2025 para fator r (salários + pró-labore + FGTS, R$)',S.histFolha)+
+    `<div style="grid-column:1/-1"><label for="f-histRecMensal">Receita mensal 2025 (opcional, 12 valores, jan a dez)</label><textarea id="f-histRecMensal" data-p="histRecMensal">${esc(S.histRecMensal||'')}</textarea></div></div></div>`;
+  for(const a of [2026,2027]){
+    const y=S.anos[a];
+    h+=`<div class="card"><h3 style="margin-top:0">Projeção ${a}</h3>`;
+    y.ativ.forEach((x,i)=>{
+      const p=`anos.${a}.ativ.${i}.`;
+      h+=`<div class="act"><div class="grid">`+fld(p+'nome','Atividade',x.nome,'text')+
+        `<div><label for="f-${p}tipo">Tipo</label><select id="f-${p}tipo" data-p="${p}tipo" data-s="1">${Object.entries(TIPOS).map(([k,t])=>`<option value="${k}" ${x.tipo===k?'selected':''}>${t.rot}</option>`).join('')}</select></div>`+
+        fld(p+'anual','Receita anual (R$)',x.anual)+
+        fld(p+'aliqICMS','Alíq. ICMS (%)',x.aliqICMS)+fld(p+'aliqISS','Alíq. ISS (%)',x.aliqISS)+
+        fld(p+'pctST','% receita com ICMS-ST',x.pctST)+fld(p+'pctMono','% receita monofásica (PIS/COFINS)',x.pctMono)+fld(p+'pctExp','% receita exportação',x.pctExp)+
+        fld(p+'pctB2B','% vendido a contribuintes (B2B)',x.pctB2B)+fld(p+'red','Redução CBS/IBS da LC 214 (0, 30, 60 ou 100)',x.red)+
+        `<div style="grid-column:1/-1"><label for="f-${p}mensal">Receita mensal (opcional, 12 valores; substitui a receita anual ÷ 12)</label><textarea id="f-${p}mensal" data-p="${p}mensal">${esc(x.mensal||'')}</textarea></div></div>`+
+        `<div class="row" style="margin-top:8px"><button class="btn ghost" data-del="${a}:${i}">Remover atividade</button></div></div>`;
+    });
+    h+=`<div class="row"><button class="btn ghost" data-add="${a}">Adicionar atividade</button></div><h3>Pessoal e encargos</h3><div class="grid">`+
+      fld(`anos.${a}.salarios`,'Salários CLT no ano (R$)',y.salarios)+fld(`anos.${a}.prolabore`,'Pró-labore no ano (R$)',y.prolabore)+
+      fld(`anos.${a}.rat`,'RAT/FAP (%)',y.rat)+fld(`anos.${a}.terc`,'Terceiros/Sistema S (%)',y.terc)+
+      `</div><h3>Entradas, créditos e despesas</h3><div class="grid">`+
+      fld(`anos.${a}.compras`,'Compras de mercadorias e insumos (R$, valor da nota)',y.compras)+
+      fld(`anos.${a}.icmsCred`,'ICMS creditável nas entradas (R$)',y.icmsCred)+
+      fld(`anos.${a}.baseCredPC`,'Base de créditos PIS/COFINS (R$, usada em 2026)',y.baseCredPC)+
+      fld(`anos.${a}.baseCredCBS`,'Base de créditos CBS/IBS (R$, usada em 2027)',y.baseCredCBS)+
+      fld(`anos.${a}.despesas`,'Despesas operacionais, exceto pessoal e tributos (R$)',y.despesas)+
+      fld(`anos.${a}.adicoes`,'Adições menos exclusões do Lucro Real (R$)',y.adicoes)+
+      fld(`anos.${a}.prejuizo`,'Prejuízo fiscal acumulado (R$)',y.prejuizo)+
+      fld(`anos.${a}.ipi`,'IPI líquido no regime regular (R$)',y.ipi)+
+      `</div><h3>Custo anual das obrigações acessórias por regime (R$)</h3><div class="grid">`+
+      fld(`anos.${a}.acess.simples`,'Simples',y.acess.simples)+fld(`anos.${a}.acess.hibrido`,'Híbrido',y.acess.hibrido)+fld(`anos.${a}.acess.presumido`,'Presumido',y.acess.presumido)+fld(`anos.${a}.acess.real`,'Real',y.acess.real)+`</div></div>`;
+  }
+  h+=`<div class="row"><button class="btn" id="btnCalc">Calcular</button><button class="btn ghost" id="btnEx">Restaurar exemplo fictício</button></div>`;
+  $('#p-dados').innerHTML=h;
+  $('#btnCalc').onclick=()=>{lerForm();calcular();setTab('res')};
+  $('#btnEx').onclick=()=>{S=exemplo();renderDados();calcular()};
+  document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{lerForm();S.anos[b.dataset.add].ativ.push({nome:'Nova atividade',tipo:'comercio',anual:0,mensal:'',aliqICMS:0,aliqISS:0,pctST:0,pctMono:0,pctExp:0,pctB2B:0,red:0});S.example=false;renderDados()});
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{lerForm();const [a,i]=b.dataset.del.split(':');if(S.anos[a].ativ.length>1){S.anos[a].ativ.splice(+i,1);renderDados()}});
+}
+function setPath(o,path,v){const k=path.split('.');for(let i=0;i<k.length-1;i++)o=o[k[i]];o[k[k.length-1]]=v}
+function lerForm(){
+  document.querySelectorAll('[data-p]').forEach(el=>{
+    let v=el.value;
+    if(el.dataset.b)v=v==='1';
+    else if(el.type==='number')v=v===''?0:parseFloat(v);
+    setPath(S,el.dataset.p,v);
+  });
+  S.example=false;
+}
+function setTab(t){
+  ui.tab=t;
+  document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));
+  document.querySelectorAll('section.panel').forEach(s=>s.classList.toggle('on',s.id==='p-'+t));
+}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{if(b.dataset.t!=='dados'&&ui.tab==='dados'){lerForm();calcular()}setTab(b.dataset.t)});
+renderDados();calcular();
+</script>
+
+</body>
+</html>

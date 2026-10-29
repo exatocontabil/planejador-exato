@@ -1389,7 +1389,7 @@ function lerXml(text,ign){
   const dh=xt(ide,'dhEmi')||xt(ide,'dEmi');
   const doc={tipo:'nfe',chave:(inf.getAttribute('Id')||'').replace(/^NFe/,'')||xt(root,'chNFe'),mod:xt(ide,'mod'),tpNF:xt(ide,'tpNF'),
     dh:dh.slice(0,10),cStat:prot?xt(prot,'cStat'):null,emit:xcad(emit),crt:xt(emit,'CRT'),dest:xcad(dest),itens:[],
-    ufEmit:xt(xq(emit,'enderEmit'),'UF'),ufDest:xt(xq(dest,'enderDest'),'UF'),idDest:xt(ide,'idDest'),indFinal:xt(ide,'indFinal'),indPres:xt(ide,'indPres'),indIEDest:xt(dest,'indIEDest')};
+    ufEmit:xt(xq(emit,'enderEmit'),'UF'),ufDest:xt(xq(dest,'enderDest'),'UF'),idDest:xt(ide,'idDest'),indFinal:xt(ide,'indFinal'),indPres:xt(ide,'indPres'),indIntermed:xt(ide,'indIntermed'),indIEDest:xt(dest,'indIEDest'),destIE:xt(dest,'IE'),destCpf:!!xt(dest,'CPF')&&!xt(dest,'CNPJ')};
   for(const det of inf.getElementsByTagNameNS('*','det')){
     const p=xq(det,'prod'),im=xq(det,'imposto'),icms=xq(im,'ICMS'),ig=icms?icms.firstElementChild:null,pis=xq(im,'PIS'),pg=pis?pis.firstElementChild:null;
     if(xt(p,'indTot')==='0')continue;
@@ -1424,6 +1424,12 @@ function papelDoc(d,cn){
   if(d.tipo==='cte'){ return same(d.toma)?'frete':null }
   return null;
 }
+function destInfo(d,it){
+  const nc=d.indIEDest==='9'||(d.indIEDest===''&&!d.destIE)||(!!d.destCpf&&!d.destIE);
+  const inter=d.idDest==='2'||String(it.cfop)[0]==='6'||!!(d.ufEmit&&d.ufDest&&d.ufEmit!==d.ufDest);
+  const pres=d.indPres||'';
+  return {inter,nc,pres,np:['2','3','9'].includes(pres)||d.indIntermed==='1',pr:['1','5'].includes(pres)&&d.indIntermed!=='1'};
+}
 function aliqInterClasse(ufE,ufD,orig){
   if(['1','2','3','8'].includes(orig))return 4;
   const SSE=['SP','RJ','MG','PR','RS','SC'];
@@ -1434,7 +1440,7 @@ function agregarXml(st){
   const seen=new Set(),por={},c={dup:0,canc:0,naoAut:0,terceiros:0};
   const mk=()=>({rec:{},recTipo:{comercio:0,industria:0,servico:0},st:0,mono:0,exp:0,eligBase:0,icmsVal:0,devol:{},devCompra:0,
     compras:{},comprasTot:0,icmsCred:0,baseCredPC:0,baseCredCBS:0,fornSimples:0,uso:0,ativo:0,outras:0,nSaida:0,nEntrada:0,meses:new Set(),
-    interCF:0,ecom:{base:0,cl:{4:0,7:0,12:0}},impBase:0,servPrest:0,issPrest:0,baseIssPrest:0,nPrest:0,servTom:0,servTomSimples:0,issTom:0,nTom:0,frete:0,freteIcms:0,freteSimples:0,nFrete:0,servTomMes:{},freteMes:{}});
+    interCF:0,ecom:{base:0,cl:{4:0,7:0,12:0}},ecomNd:{base:0,cl:{4:0,7:0,12:0}},diag:{interna:0,interContrib:0,cfPr:0,cfNd:0,outrasInter:{}},impBase:0,servPrest:0,issPrest:0,baseIssPrest:0,nPrest:0,servTom:0,servTomSimples:0,issTom:0,nTom:0,frete:0,freteIcms:0,freteSimples:0,nFrete:0,servTomMes:{},freteMes:{}});
   for(const d of st.docs){
     if(seen.has(d.chave)){c.dup++;continue} seen.add(d.chave);
     if(st.cancel.has(d.chave)){c.canc++;continue}
@@ -1454,8 +1460,13 @@ function agregarXml(st){
         const ex=String(it.cfop)[0]==='7',stt=it.icmsCst==='60'||it.icmsCst==='500',mo=it.pisCst==='04';
         if(ex)Y.exp+=base; if(stt)Y.st+=base; if(mo)Y.mono+=base;
         if(k==='receita'&&!ex&&!stt){Y.eligBase+=base;Y.icmsVal+=it.vICMS;
-          const inter=d.idDest==='2'||(d.ufEmit&&d.ufDest&&d.ufEmit!==d.ufDest);
-          if(inter&&d.indFinal==='1'&&d.indIEDest==='9'){Y.interCF+=base;if(['2','3'].includes(d.indPres)){Y.ecom.base+=base;const c=aliqInterClasse(d.ufEmit,d.ufDest,it.orig);Y.ecom.cl[c]=(Y.ecom.cl[c]||0)+base}}
+          const di=destInfo(d,it),cl=aliqInterClasse(d.ufEmit,d.ufDest,it.orig);
+          if(!di.inter)Y.diag.interna+=base;
+          else if(!di.nc)Y.diag.interContrib+=base;
+          else{Y.interCF+=base;
+            if(di.np){Y.ecom.base+=base;Y.ecom.cl[cl]=(Y.ecom.cl[cl]||0)+base}
+            else if(di.pr)Y.diag.cfPr+=base;
+            else{Y.diag.cfNd+=base;Y.ecomNd.base+=base;Y.ecomNd.cl[cl]=(Y.ecomNd.cl[cl]||0)+base}}
           if(['1','2','3','8'].includes(it.orig))Y.impBase+=base}
       }else if(k==='devol_venda'){Y.devol[mes]=(Y.devol[mes]||0)+base}
       else if(k==='devol_compra'){Y.devCompra+=custo}
@@ -1467,7 +1478,7 @@ function agregarXml(st){
         if(d.crt==='3')Y.baseCredCBS+=custo; else Y.fornSimples+=custo;
       }else if(k==='uso_consumo'){Y.uso+=custo; if(d.crt==='3')Y.baseCredCBS+=custo; else Y.fornSimples+=custo}
       else if(k==='ativo'){Y.ativo+=custo}
-      else if(k==='outras'){Y.outras+=base}
+      else if(k==='outras'){Y.outras+=base;if(dir==='saida'){const di=destInfo(d,it);if(di.inter&&di.nc){const c=String(it.cfop);Y.diag.outrasInter[c]=(Y.diag.outrasInter[c]||0)+base}}}
     }
   }
   return {por,c};
@@ -2075,7 +2086,7 @@ const TTDS=[
 const TTD_ORD=[...TTDS].sort((a,b)=>(+a.cod)-(+b.cod));
 function ttdPreset(cod){
   const c=TTD_ORD.find(t=>t.cod===cod);
-  if(c)return {cod:c.cod,nome:c.nome,tipo:c.tipo,modo:c.auto?'auto':'manual',autoKind:c.auto||null,auto:null,pctReceita:'',aliqInter:7,cargaEf:'',fundos:c.fundos,estorna:c.estorna,ref:c.ref,nota:c.nota};
+  if(c)return {cod:c.cod,nome:c.nome,tipo:c.tipo,modo:c.auto?'auto':'manual',autoKind:c.auto||null,auto:null,incSemPres:false,pctReceita:'',aliqInter:7,cargaEf:'',fundos:c.fundos,estorna:c.estorna,ref:c.ref,nota:c.nota};
   return {cod:cod,nome:'',tipo:'manual',modo:'manual',autoKind:null,auto:null,pctReceita:'',aliqInter:7,cargaEf:'',fundos:2,estorna:false,ref:'Informado pelo usuário',nota:'TTD informado manualmente: confirme as condições no termo de concessão.'};
 }
 function cardTtd(){
@@ -2091,7 +2102,19 @@ function cardTtd(){
     <details class="mini" style="margin-top:10px"><summary>O TTD não está na lista</summary><div class="grid" style="align-items:end"><div><label for="ttdOc">Código</label><input id="ttdOc" type="text" placeholder="ex.: 999"></div><div><label for="ttdOn">Descrição</label><input id="ttdOn" type="text" placeholder="ex.: atacadista"></div><div><button class="btn ghost sm" id="ttdAddO" type="button">Adicionar outro TTD</button></div></div></details>`;
     its.forEach((x,i)=>{const p=`ttd.itens.${i}.`,tab=x.tipo==='p478'?TAB478[+x.aliqInter]:null,ak=x.autoKind,au=x.auto,auto=ak&&x.modo!=='manual',R$=v=>brl(v||0);
       let det='';
-      if(ak==='ecom'&&au)det=`<div class="banner ok" style="margin:10px 0">Detectado nas notas de ${esc(au.ano)}: <b>${R$(au.base)}</b> vendidos pela internet ou telemarketing a consumidor final não contribuinte de outro estado, ou seja, <b>${pc(au.pct,1)}</b> da receita de mercadorias. Por alíquota interestadual: 4% ${R$(au.cl[4])}, 7% ${R$(au.cl[7])}, 12% ${R$(au.cl[12])}.${au.interCF>au.base+1?` Outras vendas interestaduais a consumidor final sem internet ou telemarketing (${R$(au.interCF-au.base)}) ficam de fora.`:''}</div>`;
+      if(ak==='ecom'&&au){const dg=au.diag||{};
+        det=`<div class="banner ${au.base>0?'ok':'warn'}" style="margin:10px 0">${au.base>0?`Detectado nas notas de ${esc(au.ano)}: <b>${R$(au.base)}</b> vendidos pela internet ou telemarketing a consumidor final não contribuinte de outro estado, ou seja, <b>${pc(au.pct,1)}</b> da receita de mercadorias. Por alíquota interestadual: 4% ${R$(au.cl[4])}, 7% ${R$(au.cl[7])}, 12% ${R$(au.cl[12])}.`:`Não encontrei vendas elegíveis nas notas de ${esc(au.ano)}. Veja abaixo como as suas vendas foram classificadas.`}</div>
+        <details class="mini" ${au.base>0?'':'open'} style="margin:6px 0 10px"><summary>Como as vendas foram classificadas</summary><div style="padding-top:8px"><div class="scroll"><table><tbody>
+          <tr><td>Vendas dentro do estado</td><td class="n">${R$(dg.interna)}</td></tr>
+          <tr><td>Interestaduais para contribuinte do ICMS</td><td class="n">${R$(dg.interContrib)}</td></tr>
+          <tr><td>Interestaduais para consumidor final não contribuinte</td><td class="n">${R$(au.interCF)}</td></tr>
+          <tr><td>&nbsp;&nbsp;pela internet, telemarketing ou outra venda não presencial (elegíveis)</td><td class="n">${R$(au.npBase)}</td></tr>
+          <tr><td>&nbsp;&nbsp;presenciais</td><td class="n">${R$(dg.cfPr)}</td></tr>
+          <tr><td>&nbsp;&nbsp;sem indicação de presença na nota</td><td class="n">${R$(au.ndBase)}</td></tr>
+          ${dg.outrasInter&&Object.keys(dg.outrasInter).length?`<tr><td>Interestaduais a consumidor final com CFOP fora da lista de venda (${Object.keys(dg.outrasInter).join(', ')})</td><td class="n">${R$(sum(Object.values(dg.outrasInter)))}</td></tr>`:''}
+        </tbody></table></div>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:10px;color:inherit"><input type="checkbox" data-ttdinc="${i}" ${x.incSemPres?'checked':''} style="width:auto"> Incluir também as vendas sem indicação de presença na nota</label>
+        <p class="small" style="margin-top:6px">O programa usa os campos da nota: destino em outro estado, consumidor final, destinatário não contribuinte e indicador de presença (internet, telemarketing, venda não presencial ou com intermediador/marketplace).</p></div></details>`}
       else if(ak==='importada'&&au)det=`<div class="banner ok" style="margin:10px 0">Detectado nas notas de ${esc(au.ano)}: <b>${pc(au.pct,1)}</b> da receita de mercadorias é de origem importada (origem 1, 2, 3 ou 8 nos itens). A carga efetiva da saída você informa abaixo.</div>`;
       else if(ak)det=`<div class="banner warn" style="margin:10px 0">Anexe as notas de saída no passo seguinte: o sistema calcula sozinho a parcela elegível e as alíquotas. Se preferir, use o modo manual.</div>`;
       h+=`<div class="act" style="margin-top:14px"><div class="row" style="justify-content:space-between"><div><b>TTD ${esc(x.cod)}</b> <span class="small">· ${esc(x.nome||'descrição não informada')}</span></div><button class="lk" type="button" data-ttdrm="${i}">Remover</button></div>`+
@@ -2112,7 +2135,8 @@ function ttdAuto(){
   const xm=ui.docs&&ui.docs.xml; if(!xm||!xm.Y||!S.ttd||!S.ttd.itens)return;
   const Y=xm.Y,el=Y.eligBase||0,ec=Y.ecom||{base:0,cl:{}};
   S.ttd.itens.forEach(x=>{
-    if(x.autoKind==='ecom')x.auto={ano:xm.ano,pct:el>0?ec.base/el:0,base:ec.base,eligBase:el,interCF:Y.interCF||0,cl:{4:ec.cl[4]||0,7:ec.cl[7]||0,12:ec.cl[12]||0}};
+    if(x.autoKind==='ecom'){const en=Y.ecomNd||{base:0,cl:{}},inc=!!x.incSemPres,base=ec.base+(inc?en.base:0);
+      x.auto={ano:xm.ano,pct:el>0?base/el:0,base,eligBase:el,interCF:Y.interCF||0,cl:{4:(ec.cl[4]||0)+(inc?en.cl[4]||0:0),7:(ec.cl[7]||0)+(inc?en.cl[7]||0:0),12:(ec.cl[12]||0)+(inc?en.cl[12]||0:0)},diag:Y.diag||null,npBase:ec.base,ndBase:en.base,inc}}
     else if(x.autoKind==='importada')x.auto={ano:xm.ano,pct:el>0?(Y.impBase||0)/el:0,base:Y.impBase||0,eligBase:el};
   });
 }
@@ -2125,6 +2149,7 @@ function ligaTtd(){
   const add=$('#ttdAdd'); if(add)add.onclick=()=>{lerForm();const c=$('#ttdSel').value;S.ttd.itens.push(ttdPreset(c));ttdAuto();renderDados()};
   const ao=$('#ttdAddO'); if(ao)ao.onclick=()=>{const c=$('#ttdOc').value.trim();if(!c)return;lerForm();const it=ttdPreset(c);it.nome=$('#ttdOn').value.trim();S.ttd.itens.push(it);renderDados()};
   document.querySelectorAll('[data-ttdrm]').forEach(b=>b.onclick=()=>{lerForm();S.ttd.itens.splice(+b.dataset.ttdrm,1);renderDados()});
+  document.querySelectorAll('[data-ttdinc]').forEach(c=>c.onchange=()=>{lerForm();S.ttd.itens[+c.dataset.ttdinc].incSemPres=c.checked;ttdAuto();renderDados()});
   document.querySelectorAll('[data-ttdmodo] button').forEach(b=>b.onclick=()=>{lerForm();S.ttd.itens[+b.parentElement.dataset.ttdmodo].modo=b.dataset.m;renderDados()});
 }
 

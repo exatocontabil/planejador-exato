@@ -146,6 +146,30 @@ details.mini{border:0;background:none;margin:0}
 details.mini summary{padding:0;font:600 13px var(--sans);color:var(--accent);list-style:none}
 details.mini summary::-webkit-details-marker{display:none}
 details.mini>div{padding:10px 0 0}
+
+/* ---- relatório analítico ---- */
+.rel h1{font:600 24px/1.2 var(--serif);margin:10px 0 6px;letter-spacing:-.01em}
+.rel h2{font:600 18px/1.3 var(--serif);margin:30px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.rel h3{font-size:14px;margin:18px 0 8px}
+.rel-logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.rel-logo .em{height:34px;width:auto}.rel-logo .wm{height:30px;width:auto;filter:var(--wm-filter)}
+.parecer{border-radius:12px;padding:12px 14px;margin:12px 0;background:var(--bg);font-size:14px}
+.parecer.ok{background:var(--goodbg)}.parecer.atencao{background:var(--warnbg)}.parecer.risco{background:var(--badbg)}
+.meta td:first-child{width:34%;font-weight:600}.meta td:last-child{text-align:left}
+.sig{margin-top:36px;padding-top:14px;border-top:1px solid var(--line)}
+@media print{
+  :root:root{--bg:#fff;--surface:#fff;--ink:#000;--muted:#444;--line:#ccc;--track:#eee;--soft:#fdecec;--goodbg:#eaf6ef;--warnbg:#fff6e3;--badbg:#fdeceb;--good:#127a45;--warn:#8a5300;--bad:#b3261e;--wm-filter:none;--shadow:none;color-scheme:light}
+  body{background:#fff;color:#000;padding:0;font-size:12px}
+  header.hero,nav.tabs,footer.rod,.no-print,#exBanner{display:none!important}
+  section.panel{display:none!important}
+  #p-rel{display:block!important}
+  .wrap{max-width:none;padding:0}
+  .card{box-shadow:none;border:0;padding:0;margin:0}
+  .rel h2{break-after:avoid}.rel table,.parecer,.sig{break-inside:avoid}
+  .scroll{overflow:visible;border:1px solid #ccc}
+  th,td{white-space:normal;padding:6px 8px;font-size:11px}
+  @page{margin:16mm 14mm}
+}
 @media (max-width:560px){.bar{grid-template-columns:1fr auto}.bar .t{grid-column:1/-1;order:3}.card{padding:18px;border-radius:16px}.regime{font-size:22px}.bignum{font-size:34px}}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -165,6 +189,7 @@ details.mini>div{padding:10px 0 0}
 <div class="wrap gut">
 <nav class="tabs" role="tablist" id="tabs">
   <button role="tab" data-t="res" aria-selected="true">Conclusão e números</button>
+  <button role="tab" data-t="rel" aria-selected="false">Relatório analítico</button>
   <button role="tab" data-t="eq" aria-selected="false">Ponto de equilíbrio</button>
   <button role="tab" data-t="memo" aria-selected="false">Memória de cálculo</button>
   <button role="tab" data-t="risk" aria-selected="false">Riscos e base legal</button>
@@ -174,6 +199,7 @@ details.mini>div{padding:10px 0 0}
 <div id="exBanner" class="banner warn" hidden><strong>Dados de exemplo fictícios.</strong> Os números abaixo ilustram o funcionamento. Abra “Dados da empresa”, informe os valores reais e clique em Calcular.</div>
 
 <section class="panel on" id="p-res"></section>
+<section class="panel" id="p-rel"></section>
 <section class="panel" id="p-eq"></section>
 <section class="panel" id="p-memo"></section>
 <section class="panel" id="p-risk"></section>
@@ -495,7 +521,7 @@ function calcular(){
   N=norm(S); R=avaliar(N);
   try{localStorage.setItem('planej_v1',JSON.stringify(S))}catch(e){}
   $('#exBanner').hidden=!S.example;
-  renderRes();renderEq();renderMemo();renderRisk();
+  renderRes();renderRel();renderEq();renderMemo();renderRisk();
 }
 
 /* ---------- Conclusão ---------- */
@@ -893,11 +919,11 @@ function aplicarPGDAS(r,completo,m25){
   }
   S=N; pgState=null;
   ui.pgMsg='Extrato aplicado. Agora preencha alíquotas de ICMS e ISS por atividade, pessoal, compras, créditos, despesas e custos acessórios, e clique em Calcular.';
-  renderDados(); calcular(); setTab('dados'); window.scrollTo(0,0);
+  renderDados(); calcular(); setTab('rel'); window.scrollTo(0,0);
 }
 function ligaPGDAS(){
   const f=$('#pgFile'); if(!f)return;
-  const proc=txt=>{pgState=lerPGDAS(txt);ui.pgMeses=pgState&&!pgState.erro?pgState.meses:null;pgRender();xmlRender()};
+  const proc=txt=>{pgState=lerPGDAS(txt);ui.pgMeses=pgState&&!pgState.erro?pgState.meses:null;ui.docs=ui.docs||{};ui.docs.pg=pgState&&!pgState.erro?pgState:null;pgRender();xmlRender()};
   f.onchange=async()=>{
     const file=f.files[0]; if(!file)return;
     const o=$('#pgOut'); o.innerHTML='<p class="small">Lendo o arquivo…</p>';
@@ -1031,6 +1057,7 @@ function xmlRender(){
   const cn=dig(st.cnpj); const {por,c}=cn.length>=8?agregarXml({...st,cnpj:cn}):{por:{},c:{}};
   const anos=Object.keys(por).sort(); if(!st.ano||!por[st.ano])st.ano=anos[anos.length-1];
   const Y=por[st.ano];
+  if(Y){ui.docs=ui.docs||{};ui.docs.xml={Y,ano:st.ano,c,ign,ndocs:st.docs.length,cnpj:cn}}
   let h=`<div class="card" style="margin:0"><h3 style="margin-top:0">O que foi lido</h3>
   <p>${st.docs.length} nota(s) lida(s)${ign.nfse?'; '+ign.nfse+' NFS-e ignorada(s) (ainda não leio serviço)':''}${st.cancel.size?'; '+st.cancel.size+' cancelamento(s) encontrado(s)':''}${ign.outros+ign.invalidos+ign.naoXml?'; '+(ign.outros+ign.invalidos+ign.naoXml)+' arquivo(s) de outro tipo ignorado(s)':''}.</p>
   <div class="grid"><div><label for="xmlCnpj">CNPJ da empresa (detectado, confira)</label><input id="xmlCnpj" type="text" value="${esc(fmtCnpj(st.cnpj))}"></div>
@@ -1097,7 +1124,7 @@ function aplicarXml(Y,nm){
   if(st.ano==='2025'&&nm===12){S.histRec=r2(rec-dev); S.histRecMensal=[...Array(12)].map((_,i)=>{const m=String(i+1).padStart(2,'0');return ((Y.rec[m]||0)-(Y.devol[m]||0)).toFixed(2).replace('.',',')}).join('; ')}
   S.example=false; xmlState=null;
   ui.xmlMsg='Notas aplicadas. Falta informar o pessoal, o ISS, os custos acessórios e conferir os valores estimados; depois clique em Calcular.';
-  renderDados(); calcular(); setTab('dados'); window.scrollTo(0,0);
+  renderDados(); calcular(); setTab('rel'); window.scrollTo(0,0);
 }
 function ligaDrop(){
   for(const [id,inp] of [['dropPg','pgFile'],['dropXml','xmlFiles']]){
@@ -1119,6 +1146,149 @@ function ligaXml(){
   };
   const f=$('#xmlFiles'),d=$('#xmlDir'); if(!f)return;
   f.onchange=()=>go(f.files); d.onchange=()=>go(d.files); xmlRender();
+}
+
+/* ---------- Relatório analítico ---------- */
+const RELCSS=`body{font:14px/1.6 system-ui,Arial,sans-serif;color:#111;max-width:860px;margin:24px auto;padding:0 18px}h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:28px 0 10px;border-bottom:2px solid #d10f14;padding-bottom:4px}h3{font-size:14px;margin:18px 0 6px}table{border-collapse:collapse;width:100%;font-size:12.5px;margin:6px 0 12px}th,td{border:1px solid #ddd;padding:6px 8px;text-align:right}th:first-child,td:first-child{text-align:left}th{background:#f3f3f3;font-size:11px;text-transform:uppercase}.parecer{border-left:4px solid #999;background:#f6f6f6;padding:10px 14px;margin:10px 0}.parecer.ok{border-color:#127a45}.parecer.atencao{border-color:#c98a00}.parecer.risco{border-color:#b3261e}.tag{font-weight:700;margin-right:6px}.meta td:first-child{width:36%;font-weight:600}.small{font-size:12px;color:#555}.sig{margin-top:40px}.scroll{overflow:visible;border:0}tr.win td{font-weight:700;background:#fdecec}.rel-logo img{height:34px;width:auto;margin-right:10px;vertical-align:middle}.rel-logo .wm{height:30px}`;
+function relLogo(){const e=document.querySelector('.brand .em'),w=document.querySelector('.brand .wm');return (e?`<img class="em" alt="" src="${e.src}">`:'')+(w?`<img class="wm" alt="Exato" src="${w.src}">`:'')}
+function faltasDados(){
+  const f=[],crit=[];
+  for(const a of [2026,2027]){const Y=N.anos[a];
+    if(Y.sal+Y.prol===0)crit.push(`${a}: salários e pró-labore não informados (afetam o fator r, a CPP e toda a comparação)`);
+    Y.ativ.forEach(x=>{const T=TIPOS[x.tipo];
+      if(T.merc&&x.aliqICMS===0&&x.pctExp<1)crit.push(`${a}: alíquota de ICMS da atividade “${x.nome}” não informada (sem ela o ICMS do Presumido e do Real sai zerado)`);
+      if(!T.merc&&!T.semISS&&x.aliqISS===0&&x.pctExp<1)crit.push(`${a}: alíquota de ISS da atividade “${x.nome}” não informada`);});
+    if(!Y.acess.simples&&!Y.acess.presumido&&!Y.acess.real)f.push(`${a}: custo de obrigações acessórias não informado`);
+    if(Y.rat===0)f.push(`${a}: RAT/FAP não informado (encargos do Presumido e do Real ficam subestimados)`);
+    if(!Y.compras)f.push(`${a}: compras não informadas`);
+  }
+  return {f,crit:[...new Set(crit)]};
+}
+function parecer(k,t){return `<div class="parecer ${k}"><span class="tag ${k==='ok'?'good':k==='atencao'?'warn':'bad'}">${k==='ok'?'Sem ressalvas':k==='atencao'?'Atenção':'Risco'}</span>${t}</div>`}
+function montarRelatorio(){
+  const d=ui.docs||{},pg=d.pg,xm=d.xml,agora=new Date();
+  const {f,crit}=faltasDados(); let h='',nsec=0;
+  const sec=t=>{nsec++;return `<h2>${nsec}. ${t}</h2>`};
+  const fontes=[pg?'extrato do PGDAS-D (PA '+String(pg.pa.mes).padStart(2,'0')+'/'+pg.pa.ano+')':null,xm?xm.ndocs+' nota(s) fiscal(is) em XML':null].filter(Boolean);
+  const r26=R[2026],r27=R[2027].base;
+  const rk26=ranking(r26),rk27=ranking(r27),w26=rk26[0],w27=rk27[0];
+  const ws=Object.keys(R[2027]).map(k=>ranking(R[2027][k])[0].nome),igual=ws.every(x=>x===ws[0]);
+  const est=[]; for(const [kr,kc,l] of [[.9,1,'receita −10%'],[1.1,1,'receita +10%'],[1,.9,'custos −10%'],[1,1.1,'custos +10%']]){est.push([l,ranking(avaliarAno(escalar(N,kr,kc),2027,N.P.cbs.base))[0].nome])}
+  const estavel=est.every(([,n])=>n===w27.nome);
+  h+=`<div class="rel-logo">${relLogo()}</div><h1>Relatório analítico de planejamento tributário</h1><p class="small">Emitido em ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · Exercícios de 2026 e 2027 · Fontes: ${fontes.length?fontes.join('; '):'dados digitados manualmente'}</p>`;
+  if(S.example)h+=parecer('atencao','Este relatório usa os <strong>dados de exemplo fictícios</strong> do programa. Não tem valor para nenhuma empresa real.');
+  /* 1 resumo */
+  h+=sec('Resumo e parecer conclusivo');
+  if(crit.length){
+    h+=parecer('risco',`<strong>Parecer conclusivo não emitido.</strong> Faltam dados essenciais para comparar os regimes com segurança: <ul class="tight">${crit.map(c=>'<li>'+esc(c)+'</li>').join('')}</ul>Os quadros seguintes são preliminares e não devem embasar decisão.`);
+  }else{
+    const linha=(ano,rk,r)=>{const w=rk[0],s2=rk[1],sim=r.simples;return `<tr${''}><td>${ano}</td><td>${REG[w.nome]}</td><td class="n">${brl(w.liq)}</td><td class="n">${s2?brl(w.liq-s2.liq):'—'}</td><td class="n">${sim&&w.nome!=='simples'?brl(w.liq-sim.liq):(w.nome==='simples'?'—':'Simples indisponível')}</td></tr>`};
+    h+=`<div class="scroll"><table><thead><tr><th>Exercício</th><th>Regime com maior resultado líquido</th><th>Resultado líquido</th><th>Vantagem sobre o 2º</th><th>Ganho sobre o Simples comum</th></tr></thead><tbody>${linha(2026,rk26,r26)}${linha(2027,rk27,r27)}</tbody></table></div>`;
+    const mig=w27.nome!=='simples';
+    h+=parecer(mig?'atencao':'ok',`Para <strong>2027</strong>, no cenário base de CBS (${pc4(N.P.cbs.base)}), o regime de maior resultado líquido é <strong>${REG[w27.nome]}</strong>${r27.simples&&mig?`, com ganho de ${brl(w27.liq-r27.simples.liq)} sobre o Simples comum`:''}. ${igual?'O resultado se mantém nos três cenários de alíquota da CBS.':'O vencedor <strong>muda</strong> conforme a alíquota da CBS ('+Object.keys(R[2027]).map((k,i)=>pc4(N.P.cbs[k])+' → '+REG[ws[i]]).join('; ')+'): a decisão depende de definição ainda pendente.'} ${estavel?'Também se mantém com receita ou custos 10% acima ou abaixo.':'Não se mantém em todas as variações de 10% em receita e custos: a margem de segurança é curta.'} Para 2026, o regime de maior resultado foi ${REG[w26.nome]}; como as opções de 2026 já se encerraram, esse número serve de aferição.`);
+  }
+  /* 2 enquadramento */
+  h+=sec('Enquadramento atual no Simples Nacional');
+  const rbt=pg?pg.rbt12:(S.histRec||0);
+  if(rbt>0){
+    h+=`<div class="scroll"><table class="meta"><tbody>`+
+      (pg?`<tr><td>Município / UF</td><td>${esc(pg.local||'não informado')}</td></tr><tr><td>Período de apuração</td><td>${String(pg.pa.mes).padStart(2,'0')}/${pg.pa.ano} (regime de ${esc((pg.regime||'').toLowerCase())})</td></tr>`:'')+
+      `<tr><td>Receita bruta dos 12 meses (RBT12)</td><td class="n">${brl2(rbt)} (${pc(rbt/LIM,1)} do limite de R$ 4.800.000; ${pc(rbt/SUB,1)} do sublimite de R$ 3.600.000)</td></tr>`;
+    const vistos=new Set();
+    if(pg)for(const b of pg.blocos){if(vistos.has(b.tipo||'comercio'))continue;vistos.add(b.tipo||'comercio');const tp=b.tipo||'comercio',an=TIPOS[tp].anexo==='III/V'?(pg.fr!=null?(pg.fr>=.28?'III':'V'):null):TIPOS[tp].anexo;if(an){const e=efetiva(an,pg.rbt12);h+=`<tr><td>${esc(TIPOS[tp].rot)}</td><td class="n">Anexo ${an}, ${e.k+1}ª faixa, alíquota nominal ${pc(e.al,1)}, alíquota efetiva ${pc(e.er)}</td></tr>`}}
+    h+=`</tbody></table></div>`;
+    const u=rbt/LIM;
+    h+=parecer(u>1?'risco':u>=.8?'atencao':'ok',`A RBT12 corresponde a ${pc(u,1)} do limite do Simples (LC 123/2006, art. 3º). ${u>1?'A empresa já ultrapassa o limite: verificar imediatamente a regra de exclusão.':u>=.8?'A empresa está próxima do limite; o crescimento projetado pode forçar a saída (critério deste relatório: 80% do limite).':'Há folga em relação ao limite.'}`);
+    for(const a of [2026,2027]){const r=a===2026?r26:r27;if(r.S.rbtMax>SUB)h+=parecer('atencao',`Em ${a}, a RBT12 passa de R$ 3.600.000 (máximo de ${brl(r.S.rbtMax)}): o ICMS/ISS passa a ser recolhido fora do DAS (LC 123, arts. 19 e 20), com mais obrigações acessórias.`);
+      if(r.S.frMin!==null&&r.S.frMax<.28&&r.S.frMax>=.22)h+=parecer('atencao',`Em ${a}, o fator r fica entre ${pc(r.S.frMin)} e ${pc(r.S.frMax)}, perto do patamar de 28% (LC 123, art. 18, §5º-J): um pequeno aumento da folha pode levar a atividade do Anexo V para o Anexo III e reduzir a alíquota. Vale simular o planejamento da folha.`);}
+  }else h+=`<p>Sem extrato do PGDAS-D nem histórico de receita informado.</p>`;
+  /* 3 conferência documental */
+  h+=sec('Conferência documental');
+  if(!pg&&!xm)h+=`<p>Nenhum documento foi enviado. Para a conferência, envie o extrato do PGDAS-D e os XMLs das notas fiscais.</p>`;
+  else if(!xm)h+=`<p>Só o extrato do PGDAS-D foi enviado. Envie os XMLs de NF-e e NFC-e para conferir a receita declarada e as segregações.</p>`;
+  else{
+    const Y=xm.Y,ms=[...Array(12)].map((_,i)=>String(i+1).padStart(2,'0')).filter(m=>Y.meses.has(m)),pgm=pg?pg.meses:null;
+    const liq=m=>(Y.rec[m]||0)-(Y.devol[m]||0);
+    h+=`<h3>3.1 Receita mensal: notas × declaração</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Receita nas notas (líquida)</th>${pgm?'<th>Receita declarada no PGDAS</th><th>Diferença</th>':''}</tr></thead><tbody>`;
+    let maior=0,menor=0,nm=0,nM=0,comp=0;
+    for(const m of ms){const v=liq(m),e=pgm?pgm[xm.ano+'-'+m]:undefined;let dd=null;if(e!==undefined){dd=v-e;comp++;if(dd>1){maior+=dd;nM++}else if(dd<-1){menor+=-dd;nm++}}
+      h+=`<tr><td>${m}/${xm.ano}</td><td class="n">${brl2(v)}</td>${pgm?`<td class="n">${e===undefined?'—':brl2(e)}</td><td class="n">${dd===null?'—':brl2(dd)}</td>`:''}</tr>`}
+    h+=`</tbody></table></div>`;
+    if(!pgm)h+=parecer('atencao','Sem o extrato do PGDAS-D não é possível comparar a receita das notas com a declarada.');
+    else if(!comp)h+=parecer('atencao',`Os meses das notas (${xm.ano}) não coincidem com os meses disponíveis no extrato.`);
+    else if(!nM&&!nm)h+=parecer('ok',`Nos ${comp} mês(es) comparáveis, a receita das notas confere com a declarada (diferença de até R$ 1,00).`);
+    else{
+      if(nM)h+=parecer('risco',`Em ${nM} mês(es), as notas de saída superam a receita declarada em ${brl2(maior)} no total. Isso pode indicar receita não declarada ou diferença de competência. Antes de concluir, confira se notas de remessa, transferência ou outras operações foram classificadas como venda e se o regime de apuração (competência ou caixa) é o mesmo.`);
+      if(nm)h+=parecer('atencao',`Em ${nm} mês(es), a receita declarada supera as notas lidas em ${brl2(menor)} no total. Pode faltar XML, haver receita de serviço (NFS-e) ou venda sem nota na comparação.`);
+    }
+    if(xm.ign.nfse)h+=parecer('atencao',`${xm.ign.nfse} arquivo(s) de NFS-e foram ignorados: a receita de serviços não está nas notas lidas.`);
+    h+=`<h3>3.2 Segregações da receita (ICMS-ST, monofásico, exportação)</h3>`;
+    const stX=Y.st/(sum(Object.values(Y.rec))||1),moX=Y.mono/(sum(Object.values(Y.rec))||1),exX=Y.exp/(sum(Object.values(Y.rec))||1);
+    h+=`<div class="scroll"><table><thead><tr><th>Item</th><th>Nas notas (${xm.ano})</th>${pg?'<th>No extrato (PA)</th>':''}</tr></thead><tbody>`;
+    const tot=pg?sum(pg.blocos.map(b=>b.rev)):0,pS=pg&&tot?sum(pg.blocos.map(b=>b.st))/tot:null,pM=pg&&tot?sum(pg.blocos.map(b=>b.mono))/tot:null,pE=pg&&tot?sum(pg.blocos.map(b=>b.exp?b.rev:0))/tot:null;
+    h+=`<tr><td>Receita com ICMS-ST (substituído)</td><td class="n">${pc(stX)}</td>${pg?`<td class="n">${pc(pS)}</td>`:''}</tr><tr><td>Receita monofásica (PIS/COFINS)</td><td class="n">${pc(moX)}</td>${pg?`<td class="n">${pc(pM)}</td>`:''}</tr><tr><td>Exportação</td><td class="n">${pc(exX)}</td>${pg?`<td class="n">${pc(pE)}</td>`:''}</tr></tbody></table></div>`;
+    if(pg){const dS=Math.abs(stX-pS),dM=Math.abs(moX-pM);
+      if(dS>.05||dM>.05)h+=parecer('atencao',`A segregação difere em mais de 5 pontos percentuais entre as notas (${xm.ano} inteiro) e o extrato (um mês): ICMS-ST ${pc(stX)} contra ${pc(pS)}; monofásico ${pc(moX)} contra ${pc(pM)}. Segregar receita com ST ou monofásico reduz o DAS; segregar a menos significa pagar imposto a mais, e segregar a mais gera risco de autuação. Compare mês a mês com o mesmo período.`);
+      else h+=parecer('ok',`As proporções de ICMS-ST e de monofásico nas notas ficam próximas das declaradas no extrato (diferença de até 5 pontos percentuais; comparação do ano das notas com um mês do extrato).`)}
+    h+=`<p class="small">Notas descartadas: ${xm.c.dup} duplicada(s), ${xm.c.canc} cancelada(s), ${xm.c.naoAut} não autorizada(s); ${xm.c.terceiros} de terceiros. Devoluções de venda no ano: ${brl2(sum(Object.values(Y.devol)))}.</p>`;
+  }
+  /* 4 compras */
+  h+=sec('Compras e créditos');
+  if(xm){const Y=xm.Y,rec=sum(Object.values(Y.rec))||1;
+    h+=`<div class="scroll"><table><tbody><tr><td>Compras de insumos e revenda (valor da nota)</td><td class="n">${brl2(Y.comprasTot)} (${pc(Y.comprasTot/rec,1)} da receita bruta)</td></tr><tr><td>ICMS creditável nas entradas</td><td class="n">${brl2(Y.icmsCred)}</td></tr><tr><td>Base estimada de crédito de PIS/COFINS</td><td class="n">${brl2(Y.baseCredPC)} (crédito potencial de 9,25% no Lucro Real: ${brl2(Y.baseCredPC*.0925)})</td></tr><tr><td>Base de crédito de CBS/IBS (fornecedores do regime normal)</td><td class="n">${brl2(Y.baseCredCBS)}</td></tr><tr><td>Compras de fornecedores do Simples</td><td class="n">${brl2(Y.fornSimples)}</td></tr><tr><td>Uso e consumo / ativo imobilizado</td><td class="n">${brl2(Y.uso)} / ${brl2(Y.ativo)}</td></tr></tbody></table></div>`;
+    const tc=Y.comprasTot+Y.fornSimples>0?Y.fornSimples/(Y.comprasTot+Y.uso):0;
+    h+=parecer('atencao',`O Simples não gera crédito de ICMS nem de PIS/COFINS ao próprio contribuinte; os regimes Presumido e Real geram, e a CBS gera crédito em 2027. ${Y.fornSimples>0?`Compras de fornecedores do Simples (${brl2(Y.fornSimples)}) geram crédito limitado de CBS ao comprador, por isso ficaram fora da base.`:''} Os valores acima são estimativas feitas a partir de CFOP e CST das notas e devem ser conferidas por amostragem.`);
+  }else h+=`<p>Sem XMLs de entrada. Informe compras e créditos manualmente ou envie as notas.</p>`;
+  /* 5 comparativo */
+  h+=sec('Comparativo entre regimes');
+  if(crit.length)h+=parecer('atencao','Valores preliminares: faltam dados essenciais (ver item 1). Não use este quadro para decidir.');
+  h+=`<h3>2026 (aferição)</h3>`+tabelaAno(r26,2026);
+  h+=`<h3>2027 (cenário base de CBS ${pc4(N.P.cbs.base)})</h3>`+tabelaAno(r27,2027);
+  h+=`<h3>Sensibilidade</h3><div class="scroll"><table><thead><tr><th>Cenário (2027)</th><th>Regime vencedor</th><th>Resultado líquido</th></tr></thead><tbody>`+
+    Object.keys(R[2027]).map(k=>{const w=ranking(R[2027][k])[0];return `<tr><td>CBS ${pc4(N.P.cbs[k])}</td><td>${REG[w.nome]}</td><td class="n">${brl(w.liq)}</td></tr>`}).join('')+
+    est.map(([l,n])=>`<tr><td>${l} (CBS base)</td><td>${REG[n]}</td><td class="n">—</td></tr>`).join('')+`</tbody></table></div>`;
+  const dif=rk27[1]?(w27.liq-rk27[1].liq)/r27.A.rec:0;
+  h+=parecer(dif<.01?'atencao':'ok',`A diferença entre o primeiro e o segundo colocado em 2027 é de ${pc(dif)} da receita. ${dif<.01?'É uma diferença pequena: custos de transição, erros de estimativa ou mudanças de alíquota podem inverter a ordem.':'É uma diferença relevante, mas confirme as premissas antes de decidir.'}`);
+  /* 6 reforma */
+  h+=sec('Reforma tributária e regime híbrido');
+  const cb=N.P.cbs.base;
+  h+=`<ul class="tight"><li>A alíquota da CBS em 2027 ainda não foi fixada: o TCU calculou ${pc(.113468,2)} (arredondada para 11,3%) em 28/10/2026 e cabe ao Senado fixá-la por resolução. O cenário base usado é ${pc4(cb)}; os demais são hipóteses do usuário.</li>`;
+  if(r27.simples&&r27.hibrido){const dh=r27.hibrido.liq-r27.simples.liq,cc=credCliRel(r27);
+    h+=`<li>No híbrido (CBS/IBS pelo regime regular, com ICMS/ISS e demais tributos no DAS), o resultado líquido de 2027 é ${brl(r27.hibrido.liq)}, ${dh>=0?'superior':'inferior'} em ${brl(Math.abs(dh))} ao do Simples comum.</li>`;
+    if(cc)h+=`<li>Os clientes B2B tomariam ${brl(cc.reg)} de crédito de CBS no híbrido contra ${brl(cc.simples)} no Simples comum. A diferença de ${brl(cc.reg-cc.simples)} é um argumento comercial, que este relatório não converte em receita.</li>`;}
+  h+=`<li>Notícias indicam que o prazo para o Simples optar pelo regime regular de IBS/CBS em 2027 termina em 30/10/2026 (Resolução CGSN 186/2026 e posteriores). Não foi confirmado em texto oficial: verifique no Portal do Simples Nacional.</li></ul>`;
+  /* 7 dados faltantes */
+  h+=sec('Dados faltantes e limitações');
+  const lim=[...crit,...f,'Os Anexos do Simples e as demais regras foram conferidos apenas contra o extrato do PGDAS-D enviado (Anexo I, 3ª faixa); os demais anexos ainda não foram validados com documentos reais.','A classificação de CFOP, CST e CSOSN das notas é feita por regras do programa e pode divergir do tratamento fiscal correto de cada produto.','Receita financeira, CPRB, incentivos, substituição tributária na entrada e regimes especiais não são modelados.','As regras da reforma tributária (LC 214/2025 e LC 227/2026) dependem de regulamentação em curso; consulte a aba “Riscos e base legal”.'];
+  h+=`<ul class="tight">${lim.map(l=>'<li>'+esc(l)+'</li>').join('')}</ul>`;
+  /* 8 conclusão */
+  h+=sec('Conclusão e providências');
+  const pas=[];
+  if(!crit.length){
+    if(w27.nome!=='simples')pas.push(`Avaliar a migração para ${REG[w27.nome]} em 2027: a saída do Simples deve ser comunicada até 31/01/2027 (LC 123/2006, arts. 30 e 31), e a opção pelo Presumido se faz com o primeiro pagamento de IRPJ do ano (Lei 9.718/1998, art. 13).`);
+    else pas.push('Permanecer no Simples Nacional em 2027, acompanhando o crescimento da receita em relação ao limite e ao sublimite.');
+  }else pas.push('Completar os dados essenciais listados no item 1 e gerar o relatório novamente.');
+  pas.push('Conferir as divergências documentais do item 3 antes de qualquer decisão.');
+  pas.push('Validar as premissas de ICMS, ISS, folha e créditos com o cliente.');
+  pas.push('Revisar este relatório com o contador responsável e acompanhar a regulamentação da CBS e do IBS.');
+  h+=`<ol class="tight">${pas.map(p=>'<li>'+esc(p)+'</li>').join('')}</ol>`;
+  h+=`<div class="sig"><p class="small">Relatório gerado automaticamente pelo Planejador Tributário Exato, a partir dos documentos e dos dados informados. Trata-se de minuta de apoio ao planejamento, sujeita à revisão e à assinatura do responsável técnico.</p><p>Responsável técnico: ______________________________ &nbsp; CRC: ____________ &nbsp; Data: ___/___/______</p></div>`;
+  return h;
+}
+function credCliRel(r){
+  const Y=N.anos[2027],cb=N.P.cbs.base,tot=r.A.rec;let simples=0,reg=0;
+  const pcDas=(r.simples.imp.PIS||0)+(r.simples.imp.COFINS||0);
+  for(const x of Y.ativ){const rv=sum(x.m);simples+=pcDas*(rv/tot)*x.pctB2B;reg+=rv*(1-x.pctExp)*(1-x.red)*cb*x.pctB2B}
+  return (simples||reg)?{simples,reg}:null;
+}
+function renderRel(){
+  const o=$('#p-rel'); if(!o)return;
+  const emb=window.self!==window.top;
+  let h=`<div class="card rel">${montarRelatorio()}</div>`;
+  h=`<div class="no-print row" style="justify-content:space-between;margin-bottom:14px"><div><h2 style="margin:0">Relatório analítico</h2><p class="small" style="margin:4px 0 0">Gerado com os documentos e dados atuais; atualiza quando você aplica documentos ou recalcula.</p></div>${emb?'<p class="small" style="max-width:34ch">Para gerar o PDF, abra o planejador pelo link público (esta visualização não permite imprimir).</p>':'<div class="row"><button class="btn ghost" id="relBaixar" type="button">Baixar em HTML</button><button class="btn" id="relImprimir" type="button">Baixar em PDF</button></div>'}</div>`+h;
+  o.innerHTML=h;
+  const b=$('#relBaixar'); if(b)b.onclick=()=>{const doc='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório analítico</title><style>'+RELCSS+'</style></head><body>'+montarRelatorio()+'</body></html>';const u=URL.createObjectURL(new Blob([doc],{type:'text/html'}));const a=document.createElement('a');a.href=u;a.download='relatorio-analitico.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)};
+  const p=$('#relImprimir'); if(p)p.onclick=()=>{window.print()};
 }
 
 /* ---------- Formulário ---------- */

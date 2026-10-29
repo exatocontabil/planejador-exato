@@ -438,6 +438,7 @@ table.wf tr.tot td{font-weight:700;background:var(--bg);padding-left:10px;paddin
 /* ===================== MOTOR DE CÁLCULO (puro) ===================== */
 //CALC_START
 const LIM=4.8e6, SUB=3.6e6;
+const TAB478={4:1,7:2,12:2};
 const sum=a=>a.reduce((s,v)=>s+v,0);
 const ANEXOS={
  I:{f:[[180000,.04,0],[360000,.073,5940],[720000,.095,13860],[1800000,.107,22500],[3600000,.143,87300],[4800000,.19,378000]],
@@ -520,13 +521,27 @@ function calcSimples(Y,hr,hf){
 }
 function indiretos(Y,A,P,ano,cbs,regime){
   const imp={},memo=[],av=[],ln=[];
-  const icmsBr=Math.max(0,A.icmsDeb-Y.icmsCred);
+  const icmsSem=Math.max(0,A.icmsDeb-Y.icmsCred);
+  let ttdRem=0,ttdTax=0,ttdFundo=0,ttdBen=0,ttdEst=0,shareT=0;const ttdIt=[];
+  if((regime==='presumido'||regime==='real')&&P.ttd&&P.ttd.length&&A.baseIcms>0){
+    const r0=A.icmsDeb/A.baseIcms;
+    P.ttd.forEach(t=>{const pct=Math.min(t.pct,1-shareT);if(pct<=0||t.carga==null)return;shareT+=pct;
+      const bt=A.baseIcms*pct,ar=t.tipo==='p478'?t.aliqInter:r0,tax=bt*t.carga,ben=Math.max(0,bt*ar-tax),fundo=t.fundos*ben,est=t.estorna?Y.icmsCred*pct:0;
+      ttdRem+=bt*r0;ttdTax+=tax;ttdFundo+=fundo;ttdBen+=ben;ttdEst+=est;ttdIt.push({cod:t.cod,bt,carga:t.carga,ar,tax,ben,fundo,est,pct})});
+  }
+  const temTtd=ttdIt.length>0;
+  const icmsBr=temTtd?Math.max(0,A.icmsDeb-ttdRem+ttdTax+ttdFundo-(Y.icmsCred-ttdEst)):icmsSem;
   if(A.icmsDeb<Y.icmsCred)av.push('ICMS: créditos informados superam os débitos; saldo credor de '+brl(Y.icmsCred-A.icmsDeb)+' não aproveitado no cálculo.');
   imp.ICMS=icmsBr; imp.ISS=A.iss; imp.IPI=Y.ipi;
   memo.push(`ICMS = débitos − créditos = ${brl2(A.icmsDeb)} − ${brl2(Y.icmsCred)} = ${brl2(icmsBr)}  [débito = Σ receita × (1−%ST) × (1−%exp) × alíq. ICMS]`);
   memo.push(`ISS = Σ receita de serviço × (1−%exp) × alíq. ISS = ${brl2(A.iss)}`);
   if(Y.ipi)memo.push(`IPI líquido informado = ${brl2(Y.ipi)}`);
-  if(A.baseIcms>0||Y.icmsCred>0)ln.push({t:'ICMS',base:A.baseIcms,al:A.baseIcms>0?pc(A.icmsDeb/A.baseIcms):'—',calc:`Débito de ${brl(A.icmsDeb)} menos crédito das entradas de ${brl(Y.icmsCred)}`,v:icmsBr,ref:'Legislação estadual',f:'ICMS devido = débito de ICMS nas vendas − crédito de ICMS das entradas',parts:[['Débito de ICMS nas vendas (base × alíquota)',A.icmsDeb],['(−) Crédito de ICMS das entradas',-Y.icmsCred]]});
+  if(!temTtd&&(A.baseIcms>0||Y.icmsCred>0))ln.push({t:'ICMS',base:A.baseIcms,al:A.baseIcms>0?pc(A.icmsDeb/A.baseIcms):'—',calc:`Débito de ${brl(A.icmsDeb)} menos crédito das entradas de ${brl(Y.icmsCred)}`,v:icmsBr,ref:'Legislação estadual',f:'ICMS devido = débito de ICMS nas vendas − crédito de ICMS das entradas',parts:[['Débito de ICMS nas vendas (base × alíquota)',A.icmsDeb],['(−) Crédito de ICMS das entradas',-Y.icmsCred]]});
+  if(temTtd){const cods=ttdIt.map(t=>t.cod).join(', ');
+    memo.push(`TTD ${cods}: vendas beneficiadas pagam a carga efetiva informada; ICMS = ${brl2(A.icmsDeb-ttdRem)} (vendas sem TTD) + ${brl2(ttdTax)} (vendas com TTD) + ${brl2(ttdFundo)} (fundos) − ${brl2(Y.icmsCred-ttdEst)} (crédito após estorno de ${brl2(ttdEst)}) = ${brl2(icmsBr)}; sem o TTD seria ${brl2(icmsSem)}.`);
+    ln.push({t:'ICMS',base:A.baseIcms,al:pc(A.icmsDeb/A.baseIcms)+' nas vendas sem TTD',calc:`Com TTD ${cods}: as vendas beneficiadas pagam a carga efetiva; as demais seguem o regime normal`,v:icmsBr,ref:'Legislação estadual; RICMS/SC, Anexo 2',f:'ICMS = débito das vendas sem TTD + ICMS das vendas com TTD + contrapartida a fundos − crédito das entradas (após estorno)',parts:[['Débito de ICMS nas vendas sem TTD',A.icmsDeb-ttdRem],['(+) ICMS das vendas com TTD (base × carga efetiva)',ttdTax],['(+) Contrapartida a fundos sobre o benefício',ttdFundo],['(−) Crédito de ICMS das entradas, após estorno',-(Y.icmsCred-ttdEst)]]});
+    ln.push({t:'Economia do TTD '+cods,base:null,al:'—',calc:`ICMS sem o TTD: ${brl(icmsSem)}; com o TTD: ${brl(icmsBr)}`,v:0,ref:'RICMS/SC, Anexo 2',info:true,f:'Comparação do ICMS devido com e sem o tratamento tributário diferenciado',parts:[['ICMS sem o TTD',icmsSem],['ICMS com o TTD',icmsBr]],resLabel:'Economia no ano',resV:icmsSem-icmsBr});
+  }
   if(A.baseIss>0)ln.push({t:'ISS',base:A.baseIss,al:pc(A.iss/A.baseIss),calc:'Receita de serviços × alíquota do município',v:A.iss,ref:'LC 116/2003 e lei municipal',f:'ISS = receita de serviços × alíquota do município',parts:[['Receita de serviços (base)',A.baseIss],['Alíquota efetiva',A.baseIss>0?A.iss/A.baseIss:0,'pct']]});
   if(Y.ipi)ln.push({t:'IPI',base:null,al:'—',calc:'Valor líquido informado',v:Y.ipi,ref:'Informado',f:'IPI líquido informado por você',parts:[['IPI líquido',Y.ipi]]});
   if(ano===2026){
@@ -560,7 +575,7 @@ function indiretos(Y,A,P,ano,cbs,regime){
     ln.push({t:'CBS',base:bTot,al:pc4(cbs)+(rdMed>0?' (com redução em parte da receita)':''),calc:`Débito de ${brl(deb)} menos crédito de ${brl(cbs*Y.baseCredCBS)} (${pc4(cbs)} × base de créditos de ${brl(Y.baseCredCBS)})`,v:imp.CBS,ref:'LC 214/2025; alíquota pendente do Senado',f:'CBS = base × alíquota − alíquota × base de créditos',parts:[['Base de cálculo (receita sem exportação)',bTot],['Alíquota da CBS (cenário)',cbs,'pct'],['Débito de CBS',deb],['(−) Crédito: alíquota × base de créditos',-cbs*Y.baseCredCBS]]},
       {t:'IBS',base:bTot,al:'0,10%',calc:`Débito de ${brl(ibsDeb)} menos crédito de ${brl(.001*Y.baseCredCBS)}`,v:imp.IBS,ref:'EC 132/2023, ADCT art. 126',f:'IBS (0,1% em 2027) = base × 0,1% − 0,1% × base de créditos',parts:[['Base de cálculo',bTot],['Alíquota do IBS',.001,'pct'],['Débito de IBS',ibsDeb],['(−) Crédito',-.001*Y.baseCredCBS]]});
   }
-  return {imp,memo,av,ln};
+  return {imp,memo,av,ln,ttd:temTtd?{itens:ttdIt,economia:icmsSem-icmsBr,beneficio:ttdBen,cods:ttdIt.map(t=>t.cod).join(', ')}:null};
 }
 function brl(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}).format(v)}
 function brl2(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2,maximumFractionDigits:2}).format(v)}
@@ -607,14 +622,15 @@ function calcPresumido(Y,A,P,ano,cbs){
     {t:'INSS patronal (CPP)',base:Y.sal+Y.prol,al:'20%',calc:'20% × (salários + pró-labore), fora do DAS',v:.20*(Y.sal+Y.prol),ref:'Lei 8.212/1991, art. 22',enc:true,f:'INSS patronal = 20% × (salários + pró-labore)',parts:[['Salários + pró-labore',Y.sal+Y.prol],['Alíquota',.20,'pct']]},
     {t:'RAT e terceiros',base:Y.sal,al:pc(Y.rat+Y.terc),calc:`RAT ${pc(Y.rat)} + terceiros ${pc(Y.terc)} sobre os salários`,v:(Y.rat+Y.terc)*Y.sal,ref:'Informado',enc:true,f:'RAT + terceiros = (RAT + terceiros) × salários',parts:[['Salários',Y.sal],['RAT + terceiros',Y.rat+Y.terc,'pct']]});
   const r=fechar('presumido',Y,A,imp,p.encReg,Y.acess.presumido,memo);
-  r.av=ind.av; r.linhas=ln;
+  r.av=ind.av; r.linhas=ln; r.ttd=ind.ttd;
   r.pres=Y.ativ.map(x=>{const T=TIPOS[x.tipo],rec=sum(x.m);return {nome:x.nome,rec,pi:T.irpj,pcs:T.csll,bi:rec*T.irpj,bc:rec*T.csll}});
   return dividendos(r,Y,P,'presumido');
 }
 function calcReal(Y,A,P,ano,cbs){
   const ind=indiretos(Y,A,P,ano,cbs,'real'); const imp=Object.assign({},ind.imp); const memo=ind.memo.slice(); const ln=ind.ln.slice();
   const p=pessoal(Y); const indSum=sum(Object.values(ind.imp));
-  const lr=A.rec-indSum-Y.compras-Y.despesas-p.pes-p.encReg+Y.adicoes;
+  const exc=P.ttdExcl&&ind.ttd?ind.ttd.beneficio:0;
+  const lr=A.rec-indSum-Y.compras-Y.despesas-p.pes-p.encReg+Y.adicoes-exc;
   memo.push(`Lucro antes do IRPJ = receita − tributos indiretos líquidos − compras − despesas − pessoal − encargos + adições/exclusões = ${brl2(A.rec)} − ${brl2(indSum)} − ${brl2(Y.compras)} − ${brl2(Y.despesas)} − ${brl2(p.pes)} − ${brl2(p.encReg)} + ${brl2(Y.adicoes)} = ${brl2(lr)}`);
   const comp=Math.min(Y.prejuizo,.30*Math.max(0,lr)); const base=Math.max(0,lr-comp);
   memo.push(`Compensação de prejuízo (limite 30% do lucro) = ${brl2(comp)};  base = ${brl2(base)}`);
@@ -624,8 +640,8 @@ function calcReal(Y,A,P,ano,cbs){
     {t:'CSLL',base,al:'9%',calc:`9% × ${brl(base)}`,v:imp.CSLL,ref:'Lei 7.689/1988',f:'CSLL = 9% × lucro tributável',parts:[['Lucro tributável (base)',base],['Alíquota',.09,'pct']]},
     {t:'INSS patronal (CPP)',base:Y.sal+Y.prol,al:'20%',calc:'20% × (salários + pró-labore), fora do DAS',v:.20*(Y.sal+Y.prol),ref:'Lei 8.212/1991, art. 22',enc:true,f:'INSS patronal = 20% × (salários + pró-labore)',parts:[['Salários + pró-labore',Y.sal+Y.prol],['Alíquota',.20,'pct']]},
     {t:'RAT e terceiros',base:Y.sal,al:pc(Y.rat+Y.terc),calc:`RAT ${pc(Y.rat)} + terceiros ${pc(Y.terc)} sobre os salários`,v:(Y.rat+Y.terc)*Y.sal,ref:'Informado',enc:true,f:'RAT + terceiros = (RAT + terceiros) × salários',parts:[['Salários',Y.sal],['RAT + terceiros',Y.rat+Y.terc,'pct']]});
-  const r=fechar('real',Y,A,imp,p.encReg,Y.acess.real,memo); r.av=ind.av; r.lr=lr; r.linhas=ln;
-  r.lrDet={rec:A.rec,indSum,compras:Y.compras,despesas:Y.despesas,pes:p.pes,encReg:p.encReg,adicoes:Y.adicoes,lr,comp,base};
+  const r=fechar('real',Y,A,imp,p.encReg,Y.acess.real,memo); r.av=ind.av; r.lr=lr; r.linhas=ln; r.ttd=ind.ttd;
+  r.lrDet={rec:A.rec,indSum,compras:Y.compras,despesas:Y.despesas,pes:p.pes,encReg:p.encReg,adicoes:Y.adicoes,lr,comp,base,ttdExc:exc};
   return dividendos(r,Y,P,'real');
 }
 function montaSimples(Y,A,P,S,hibrido,cbs,ano){
@@ -736,7 +752,7 @@ function exemplo(){
     salarios:480000*f,prolabore:120000,rat:1,terc:5.8,
     compras:1100000*f,icmsCred:150000*f,baseCredPC:1000000*f,baseCredCBS:1150000*f,despesas:400000*f,adicoes:0,prejuizo:0,ipi:0,
     acess:{simples:18000,hibrido:30000,presumido:36000,real:72000}});
-  return {example:true,socios:2,pctDist:100,contabil:true,icmsIntegra:true,
+  return {example:true,ttd:{possui:'',itens:[],exclLucro:false},socios:2,pctDist:100,contabil:true,icmsIntegra:true,
     cbs:{baixo:9.2,base:11.3,alto:12.0},
     histRec:2700000,histRecMensal:'',histFolha:580000,
     anos:{2026:y(1),2027:y(1.10)}};
@@ -753,6 +769,16 @@ function meses12(txt,anual){
 function norm(S){
   const N={P:{socios:+S.socios||1,pctDist:(+S.pctDist||0)/100,contabil:!!S.contabil,icmsIntegra:!!S.icmsIntegra,cbs:{}},hist:{},anos:{}};
   for(const k of ['baixo','base','alto'])N.P.cbs[k]=(+S.cbs[k]||0)/100;
+  const T=S.ttd||{possui:'',itens:[]},pend=[],tiAll=(T.possui==='sim'&&Array.isArray(T.itens))?T.itens:[];
+  N.P.ttd=tiAll.map(t=>{const tipo=t.tipo==='p478'?'p478':'manual',ai=(+t.aliqInter||7)/100;let c=(t.cargaEf===''||t.cargaEf==null)?null:(+t.cargaEf)/100;
+    if(tipo==='p478'&&c==null)c=TAB478[Math.round(ai*100)]!=null?TAB478[Math.round(ai*100)]/100:null;
+    return {cod:String(t.cod||'?'),nome:t.nome||'',tipo,pct:Math.min(1,Math.max(0,(+t.pctReceita||0)/100)),carga:c,aliqInter:ai,fundos:(+t.fundos||0)/100,estorna:!!t.estorna}});
+  N.P.ttdExcl=!!T.exclLucro;
+  if(T.possui==='')pend.push({t:'Informar se a empresa possui TTD de Santa Catarina (Passo 1)',crit:false});
+  else if(T.possui==='nao_sei')pend.push({t:'Verificar se a empresa possui TTD (consulta SEF-SC)',crit:false});
+  else if(T.possui==='sim'){if(!tiAll.length)pend.push({t:'Informar qual TTD a empresa possui',crit:true});
+    N.P.ttd.forEach(t=>{if(!(t.pct>0))pend.push({t:'TTD '+t.cod+': informar o % da receita de mercadorias com o tratamento',crit:true});else if(t.carga==null)pend.push({t:'TTD '+t.cod+': informar a carga efetiva de ICMS nas operações beneficiadas',crit:true})})}
+  N.P.ttdPend=pend;
   N.hist.rec=meses12(S.histRecMensal,+S.histRec||0);
   N.hist.fol=Array(12).fill((+S.histFolha||0)/12);
   for(const a of [2026,2027]){
@@ -938,7 +964,9 @@ function renderRes(){
     if(w27.acess!==s27.acess)pq.push(`Obrigações acessórias (informadas): ${brl(w27.acess)} por ano contra ${brl(s27.acess)}.`);
     const Y27=N.anos[2027];if(Y27.icmsCred+Y27.baseCredCBS>0)pq.push(`Créditos de entrada considerados nos regimes que os aproveitam: ICMS de ${brl(Y27.icmsCred)} e base de ${brl(Y27.baseCredCBS)} para CBS/IBS. O Simples comum não aproveita esses créditos, mas tem alíquota efetiva menor.`);}
   const porq=pq.length&&!crit.length?`<div class="card"><div class="cardh"><div><h3>Por que ${REG[w27.nome]}?</h3><p class="small">As diferenças que mais pesam, em 2027.</p></div><button class="btn ghost sm" id="irImp" type="button">Ver imposto por imposto</button></div><ul class="tight">${pq.map(t=>'<li>'+t+'</li>').join('')}</ul></div>`:'';
-  h+=`<div class="dgrid">${comp}${faz}</div>${porq}`;
+  const tpz=r27.presumido&&r27.presumido.ttd,trz=r27.real&&r27.real.ttd,tx=tpz||trz;
+  const ttdB=tx?`<div class="banner" style="margin-bottom:16px"><b>TTD considerado: ${tx.cods}.</b> Em 2027, o ICMS fica ${tpz?brl(tpz.economia)+' menor no Presumido':''}${tpz&&trz?' e ':''}${trz?brl(trz.economia)+' menor no Real':''} por ano. O benefício não vale no Simples, em que o ICMS vem dentro do DAS.</div>`:'';
+  h+=`${ttdB}<div class="dgrid">${comp}${faz}</div>${porq}`;
   h+=`<h2 style="margin-top:34px">Análise detalhada</h2><p class="sub" style="margin-bottom:16px">Gráficos, limites do Simples, prazos e tabelas completas para quem quer conferir os números.</p>`;
   h+=`<div class="dgrid">`;
   h+=`<div class="card"><div class="cardh"><div><h3>Resultado líquido por regime</h3><p class="small">Receita menos custos, folha e tributos, antes do IRPF dos sócios.</p></div></div>${chartResultado()}</div>`;
@@ -990,7 +1018,7 @@ function matrizImpostos(r){
 function tabelaLinhas(x,rec){
   if(!x.linhas||!x.linhas.length)return '';
   let h=`<div class="scroll"><table class="ln"><thead><tr><th>Tributo</th><th>Base de cálculo</th><th>Alíquota</th><th>Como foi calculado</th><th>Valor</th><th>% da receita</th></tr></thead><tbody>`;
-  for(const l of x.linhas)h+=`<tr><td><b>${esc(l.t)}</b><small>${esc(l.ref||'')}</small></td><td class="n">${l.base==null?'—':brl(l.base)}</td><td class="n" style="white-space:normal;min-width:110px">${esc(l.al)}</td><td style="white-space:normal;min-width:230px;text-align:left">${esc(l.calc)}</td><td class="n"><b>${brl(l.v)}</b></td><td class="n">${rec?pc(l.v/rec,2):'—'}</td></tr>`;
+  for(const l of x.linhas)h+=`<tr><td><b>${esc(l.t)}</b><small>${esc(l.ref||'')}</small></td><td class="n">${l.base==null?'—':brl(l.base)}</td><td class="n" style="white-space:normal;min-width:110px">${esc(l.al)}</td><td style="white-space:normal;min-width:230px;text-align:left">${esc(l.calc)}</td><td class="n"><b>${l.info?'—':brl(l.v)}</b></td><td class="n">${l.info||!rec?'—':pc(l.v/rec,2)}</td></tr>`;
   const tot=x.carga;
   h+=`<tr class="tot"><td colspan="4" style="text-align:left">Total de tributos e encargos</td><td class="n">${brl(tot)}</td><td class="n">${pc(x.cargaPct,2)}</td></tr></tbody></table></div>`;
   return h;
@@ -999,7 +1027,7 @@ function extrasRegime(x,rec){
   let h='';
   if(x.enq&&x.enq.length)h+=`<h4 class="sub4">Enquadramento no Simples (última competência do ano)</h4><div class="scroll"><table><thead><tr><th>Atividade</th><th>Anexo / faixa</th><th>Alíquota nominal</th><th>Parcela a deduzir</th><th>Alíquota efetiva</th><th>Efetiva média do ano</th></tr></thead><tbody>${x.enq.map(e=>`<tr><td>${esc(e.nome)}</td><td>${e.an} / ${e.faixa}ª</td><td class="n">${pc(e.al,1)}</td><td class="n">${brl(e.pd)}</td><td class="n">${pc(e.erUlt)}</td><td class="n">${pc(e.erMed)}</td></tr>`).join('')}</tbody></table></div><p class="small">Alíquota efetiva = (RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12 (LC 123/2006, art. 18, §1º). A efetiva média é o DAS da atividade dividido pela receita dela.</p>`;
   if(x.pres)h+=`<h4 class="sub4">Base de cálculo presumida</h4><div class="scroll"><table><thead><tr><th>Atividade</th><th>Receita</th><th>Presunção IRPJ</th><th>Base IRPJ</th><th>Presunção CSLL</th><th>Base CSLL</th></tr></thead><tbody>${x.pres.map(e=>`<tr><td>${esc(e.nome)}</td><td class="n">${brl(e.rec)}</td><td class="n">${pc(e.pi,0)}</td><td class="n">${brl(e.bi)}</td><td class="n">${pc(e.pcs,0)}</td><td class="n">${brl(e.bc)}</td></tr>`).join('')}</tbody></table></div><p class="small">No Presumido o imposto incide sobre uma margem presumida da receita, não sobre o lucro real (Lei 9.249/1995, arts. 15 e 20).</p>`;
-  if(x.lrDet){const d=x.lrDet;h+=`<h4 class="sub4">Do faturamento ao lucro tributável</h4><div class="scroll"><table><tbody><tr><td>Receita bruta</td><td class="n">${brl(d.rec)}</td></tr><tr><td>(−) Tributos indiretos líquidos (ICMS, ISS, PIS/COFINS ou CBS/IBS, IPI)</td><td class="n">${brl(d.indSum)}</td></tr><tr><td>(−) Compras</td><td class="n">${brl(d.compras)}</td></tr><tr><td>(−) Despesas operacionais</td><td class="n">${brl(d.despesas)}</td></tr><tr><td>(−) Pessoal (salários, pró-labore, FGTS)</td><td class="n">${brl(d.pes)}</td></tr><tr><td>(−) Encargos patronais</td><td class="n">${brl(d.encReg)}</td></tr><tr><td>(+) Adições menos exclusões</td><td class="n">${brl(d.adicoes)}</td></tr><tr class="tot"><td>Lucro antes do IRPJ</td><td class="n">${brl(d.lr)}</td></tr><tr><td>(−) Prejuízo fiscal compensado (limite de 30%)</td><td class="n">${brl(d.comp)}</td></tr><tr class="tot"><td>Base do IRPJ e da CSLL</td><td class="n">${brl(d.base)}</td></tr></tbody></table></div>`}
+  if(x.lrDet){const d=x.lrDet;h+=`<h4 class="sub4">Do faturamento ao lucro tributável</h4><div class="scroll"><table><tbody><tr><td>Receita bruta</td><td class="n">${brl(d.rec)}</td></tr><tr><td>(−) Tributos indiretos líquidos (ICMS, ISS, PIS/COFINS ou CBS/IBS, IPI)</td><td class="n">${brl(d.indSum)}</td></tr><tr><td>(−) Compras</td><td class="n">${brl(d.compras)}</td></tr><tr><td>(−) Despesas operacionais</td><td class="n">${brl(d.despesas)}</td></tr><tr><td>(−) Pessoal (salários, pró-labore, FGTS)</td><td class="n">${brl(d.pes)}</td></tr><tr><td>(−) Encargos patronais</td><td class="n">${brl(d.encReg)}</td></tr><tr><td>(+) Adições menos exclusões</td><td class="n">${brl(d.adicoes)}</td></tr>${d.ttdExc>0?`<tr><td>(−) Benefício do TTD excluído da base (subvenção para investimento)</td><td class="n">${brl(d.ttdExc)}</td></tr>`:''}<tr class="tot"><td>Lucro antes do IRPJ</td><td class="n">${brl(d.lr)}</td></tr><tr><td>(−) Prejuízo fiscal compensado (limite de 30%)</td><td class="n">${brl(d.comp)}</td></tr><tr class="tot"><td>Base do IRPJ e da CSLL</td><td class="n">${brl(d.base)}</td></tr></tbody></table></div>`}
   return h;
 }
 function explicaCarga(r){
@@ -1093,7 +1121,7 @@ function fluxoReceita(x,Y){
 }
 function cardCalc(l,rec){
   const rows=(l.parts||[]).map(([a,v,k])=>`<tr><td>${esc(a)}</td><td>${k==='pct'?pc(v,2):brl2(v)}</td></tr>`).join('');
-  return `<div class="cc"><div><h4>${esc(l.t)}</h4><div class="fm">${esc(l.f||l.calc)}</div><span class="rf">${esc(l.ref||'')}</span></div><div><table class="pr"><tbody>${rows}<tr class="res"><td>Valor devido</td><td>${brl2(l.v)}</td></tr></tbody></table><div class="small" style="text-align:right;margin-top:4px">${rec?pc(l.v/rec,2)+' da receita':''}</div></div></div>`;
+  return `<div class="cc"><div><h4>${esc(l.t)}</h4><div class="fm">${esc(l.f||l.calc)}</div><span class="rf">${esc(l.ref||'')}</span></div><div><table class="pr"><tbody>${rows}<tr class="res"><td>${l.resLabel||'Valor devido'}</td><td>${brl2(l.resV!==undefined?l.resV:l.v)}</td></tr></tbody></table><div class="small" style="text-align:right;margin-top:4px">${rec?pc((l.resV!==undefined?l.resV:l.v)/rec,2)+' da receita':''}</div></div></div>`;
 }
 function renderMemo(){
   const ano=ui.anoMem,r=ano===2026?R[2026]:R[2027][ui.cen],ks=['simples','hibrido','presumido','real'].filter(k=>r[k]);
@@ -1141,6 +1169,8 @@ const LEGAL=[
  ['LC 227/2026 (anexos do Simples com colunas de CBS e IBS)','Partilha do DAS em 2027–2028: o programa trata a CBS como a antiga parcela PIS/COFINS, o que pode estar desatualizado','Não conferido no texto oficial; numeração dos anexos incerta nas fontes','Alta'],
  ['LC 214/2025 e EC 132','Se ICMS/ISS integram a base da CBS/IBS na transição (parâmetro no programa)','A confirmar no texto vigente','Média'],
  ['LC 214/2025 e EC 132','IPI zerado em 2027 salvo produtos concorrentes com a Zona Franca (campo “IPI líquido” é manual)','A confirmar por produto','Média'],
+ ['RICMS/SC, Anexo 2 (TTD) e termos de concessão da SEF-SC','TTD de Santa Catarina (por exemplo, o 478 do e-commerce): carga efetiva de ICMS, contrapartidas ao FUMDES e ao Fundo Social','Catálogo parcial, de fontes secundárias; confirmar no termo de concessão e no serviço “Consultar TTD”. O Decreto 1.416/2026 alterou regra de vedação ao crédito presumido','Alta'],
+ ['LC 160/2017, Convênio ICMS 190/2017 e EC 132/2023','Benefícios de ICMS, inclusive TTD, acompanham a transição do ICMS (redução gradual a partir de 2029); o programa os aplica sem corte em 2026 e 2027','Calendário e regra por benefício a confirmar','Alta'],
  ['Lei 15.270/2025','IRRF de 10% sobre dividendos acima de R$ 50 mil/mês por sócio; IRPF mínimo (não modelado)','Vigente a partir de 2026; regulamento da RFB a acompanhar','Média'],
  ['Lei 14.973/2024','Reoneração gradual da CPRB e da folha de setores desonerados (não modelada)','Vigente; checar se sua atividade era desonerada','Média']
 ];
@@ -1294,7 +1324,7 @@ async function pdfTexto(file){
 }
 function vazio(){
   const y=()=>({ativ:[],salarios:0,prolabore:0,rat:0,terc:0,compras:0,icmsCred:0,baseCredPC:0,baseCredCBS:0,despesas:0,adicoes:0,prejuizo:0,ipi:0,acess:{simples:0,hibrido:0,presumido:0,real:0}});
-  return {example:false,socios:S.socios||1,pctDist:S.pctDist||100,contabil:S.contabil,icmsIntegra:S.icmsIntegra,cbs:S.cbs,histRec:0,histRecMensal:'',histFolha:0,anos:{2026:y(),2027:y()}};
+  return {example:false,ttd:S.ttd||{possui:'',itens:[],exclLucro:false},socios:S.socios||1,pctDist:S.pctDist||100,contabil:S.contabil,icmsIntegra:S.icmsIntegra,cbs:S.cbs,histRec:0,histRecMensal:'',histFolha:0,anos:{2026:y(),2027:y()}};
 }
 const dig=s=>String(s||'').replace(/\D/g,'');
 const fmtCnpj=c=>c.length===14?c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'):c;
@@ -1476,7 +1506,7 @@ function cardImport(){
   const c=docsContagem(),n=Object.values(c).filter(Boolean).length;
   const pgSt=pgState&&!pgState.erro?`Período ${String(pgState.pa.mes).padStart(2,'0')}/${pgState.pa.ano} · RBT12 ${brl(pgState.rbt12)}`:null;
   const btn=(id,acc,mult)=>`<label class="btn ghost sm">Anexar<input id="${id}" type="file" ${mult?'multiple':''} accept="${acc}" aria-label="Anexar"></label>`;
-  let h=`<div class="card" id="impCard"><div class="k">Passo 1 · documentos da análise</div><h3 style="margin-top:4px">Checklist de documentos</h3>
+  let h=`<div class="card" id="impCard"><div class="k">Passo 2 · documentos da análise</div><h3 style="margin-top:4px">Checklist de documentos</h3>
   <p class="small" style="max-width:72ch">Anexe cada tipo no seu lugar, ou arraste os arquivos sobre a linha. Quanto mais itens marcados, mais completa fica a análise e o relatório. A leitura acontece no seu navegador; nada é enviado.</p>
   ${ui.msg?`<div class="banner ok">${esc(ui.msg)}</div>`:''}
   <div class="prog"><div class="pb"><i style="width:${Math.round(n/5*100)}%"></i></div><span class="small"><b>${n} de 5</b> documentos anexados</span></div>
@@ -1685,6 +1715,7 @@ function faltasDados(NN){
     if(!Y.compras)add('compras','Compras de mercadorias e insumos',false,a);
   }
   const fa=s=>s.size===2?'2026 e 2027':[...s][0],f=[],crit=[];
+  (NN.P.ttdPend||[]).forEach(p=>(p.crit?crit:f).push(p.t));
   for(const [,e] of M){const t=e.t+(e.nomes.size?' ['+[...e.nomes].join(', ')+']':'')+' · '+fa(e.anos);(e.c?crit:f).push(t)}
   return {f,crit};
 }
@@ -1721,7 +1752,7 @@ function montarRelatorio(){
   h+=sec('Documentos considerados');
   {const dc=docsContagem(),nomes={pgdas:'Extrato do PGDAS-D',saida:'Notas de saída e serviços prestados',entrada:'Notas de entrada',tomados:'Notas de serviços tomados',cte:'CT-e (frete)'},
    efeito={pgdas:'sem o extrato não há conferência da receita declarada nem do DAS',saida:'sem notas de saída não é possível estimar as segregações (ST, monofásico, exportação) nem a receita por atividade',entrada:'sem notas de entrada, compras e créditos de ICMS, PIS/COFINS e CBS ficam por informar',tomados:'sem serviços tomados, as despesas e os créditos sobre serviços ficam por informar, o que pesa no Lucro Real',cte:'sem CT-e, os fretes e seus créditos não entram na análise'};
-   h+=`<div class="scroll"><table><thead><tr><th>Documento</th><th>Situação</th></tr></thead><tbody>${Object.keys(nomes).map(k=>`<tr><td>${nomes[k]}</td><td class="n">${k==='pgdas'?(dc[k]?'Anexado':'Não anexado'):(dc[k]?dc[k]+' documento(s)':'Não anexado')}</td></tr>`).join('')}</tbody></table></div>`;
+   h+=`<div class="scroll"><table><thead><tr><th>Documento</th><th>Situação</th></tr></thead><tbody>${Object.keys(nomes).map(k=>`<tr><td>${nomes[k]}</td><td class="n">${k==='pgdas'?(dc[k]?'Anexado':'Não anexado'):(dc[k]?dc[k]+' documento(s)':'Não anexado')}</td></tr>`).join('')}</tbody></table></div>`+`<div class="scroll" style="margin-top:8px"><table><tbody><tr><td>TTD de Santa Catarina</td><td class="n">${(S.ttd&&S.ttd.possui==='sim'&&N.P.ttd.length)?N.P.ttd.map(t=>t.cod).join(', ')+' (considerado no Presumido e no Real)':S.ttd&&S.ttd.possui==='nao'?'Não possui':'Não informado'}</td></tr></tbody></table></div>`;
    const falta=Object.keys(nomes).filter(k=>!dc[k]);
    h+=falta.length?parecer('atencao',`Não foram anexados: ${falta.map(k=>nomes[k]).join('; ')}. Consequências: ${falta.map(k=>efeito[k]).join('; ')}.`):parecer('ok','Todos os documentos do checklist foram anexados.');}
   /* 1 resumo */
@@ -1794,6 +1825,7 @@ function montarRelatorio(){
   if(crit.length)h+=parecer('atencao','Valores preliminares: faltam dados essenciais (ver item 2). Não use este quadro para decidir.');
   h+=`<h3>2026 (aferição)</h3>`+tabelaAno(r26,2026);
   h+=`<h3>2027 (cenário base de CBS ${pc4(N.P.cbs.base)})</h3>`+tabelaAno(r27,2027);
+  {const a=r27.presumido&&r27.presumido.ttd,b=r27.real&&r27.real.ttd,t=a||b;if(t)h+=parecer('atencao',`TTD considerado: ${t.cods}. Em 2027, o ICMS fica ${a?brl(a.economia)+' menor no Presumido':''}${a&&b?' e ':''}${b?brl(b.economia)+' menor no Real':''} por ano, com contrapartida a fundos já incluída. O benefício não se aplica ao Simples. As regras do TTD vêm de fontes secundárias e dependem do termo de concessão; os benefícios de ICMS também seguem a transição da reforma tributária.`)}
   h+=`<h3>Sensibilidade</h3><div class="scroll"><table><thead><tr><th>Cenário (2027)</th><th>Regime vencedor</th><th>Resultado líquido</th></tr></thead><tbody>`+
     Object.keys(R[2027]).map(k=>{const w=ranking(R[2027][k])[0];return `<tr><td>CBS ${pc4(N.P.cbs[k])}</td><td>${REG[w.nome]}</td><td class="n">${brl(w.liq)}</td></tr>`}).join('')+
     est.map(([l,n])=>`<tr><td>${l} (CBS base)</td><td>${REG[n]}</td><td class="n">—</td></tr>`).join('')+`</tbody></table></div>`;
@@ -1813,7 +1845,7 @@ function montarRelatorio(){
   h+=`<li>Notícias indicam que o prazo para o Simples optar pelo regime regular de IBS/CBS em 2027 termina em 30/10/2026 (Resolução CGSN 186/2026 e posteriores). Não foi confirmado em texto oficial: verifique no Portal do Simples Nacional.</li></ul>`;
   /* 7 dados faltantes */
   h+=sec('Dados faltantes e limitações');
-  const lim=[...crit,...f,'Os Anexos do Simples e as demais regras foram conferidos apenas contra o extrato do PGDAS-D enviado (Anexo I, 3ª faixa); os demais anexos ainda não foram validados com documentos reais.','A classificação de CFOP, CST e CSOSN das notas é feita por regras do programa e pode divergir do tratamento fiscal correto de cada produto.','Receita financeira, CPRB, incentivos, substituição tributária na entrada e regimes especiais não são modelados.','As regras da reforma tributária (LC 214/2025 e LC 227/2026) dependem de regulamentação em curso; consulte a aba “Riscos e base legal”.'];
+  const lim=[...crit,...f,'O catálogo de TTD de Santa Catarina é parcial e vem de fontes secundárias: a lista oficial está no serviço “Consultar TTD” da SEF-SC e no RICMS/SC, Anexo 2. A carga efetiva e as contrapartidas precisam ser confirmadas no termo de concessão da empresa.','Os Anexos do Simples e as demais regras foram conferidos apenas contra o extrato do PGDAS-D enviado (Anexo I, 3ª faixa); os demais anexos ainda não foram validados com documentos reais.','A classificação de CFOP, CST e CSOSN das notas é feita por regras do programa e pode divergir do tratamento fiscal correto de cada produto.','Receita financeira, CPRB, incentivos, substituição tributária na entrada e regimes especiais não são modelados.','As regras da reforma tributária (LC 214/2025 e LC 227/2026) dependem de regulamentação em curso; consulte a aba “Riscos e base legal”.'];
   h+=`<ul class="tight">${lim.map(l=>'<li>'+esc(l)+'</li>').join('')}</ul>`;
   /* 8 conclusão */
   h+=sec('Conclusão e providências');
@@ -1991,6 +2023,69 @@ function renderPlan(){
     ui.planMsg='Planejamento excluído.';renderPlan()});
 }
 
+/* ---------- TTD de Santa Catarina ---------- */
+const TTD_FONTE='Catálogo parcial montado a partir de fontes secundárias (suporte técnico e consultorias). A lista oficial está no serviço “Consultar TTD” da SEF-SC e no RICMS/SC, Anexo 2. Confirme cada percentual no termo de concessão da empresa.';
+const NOTA_GEN='Dados obtidos de material de suporte técnico: confirme o benefício no termo de concessão e informe a carga efetiva do ICMS nas operações beneficiadas (ou o crédito presumido equivalente).';
+const TTDS=[
+ {cod:'478',nome:'E-commerce: vendas interestaduais a consumidor final não contribuinte',setor:'Comércio eletrônico',tipo:'p478',fundos:2,estorna:true,ref:'RICMS/SC, Anexo 2, art. 21, XV',
+  nota:'Crédito presumido de ICMS nas vendas pela internet ou telemarketing a consumidor final não contribuinte de outro estado. A carga efetiva por alíquota interestadual (4% → 1%; 7% → 2%; 12% → 2%) vem de fonte secundária e deve ser confirmada. A contrapartida de 2% do crédito presumido ao FUMDES consta do termo de concessão. O DIFAL do estado de destino continua devido e não é modelado. O Decreto 1.416/2026 mexeu na regra de vedação ao crédito presumido: confira o efeito.'},
+ {cod:'409',nome:'Importação: diferimento do ICMS no desembaraço e crédito presumido na saída (com antecipação)',setor:'Importação',tipo:'manual',fundos:4.5,estorna:false,ref:'RICMS/SC, Anexo 2, art. 246',
+  nota:'Contrapartida de 2,5% ao Fundo Social e 2,0% ao FUMDES sobre o valor da exoneração (fonte secundária). As fontes divergem sobre a antecipação do ICMS neste TTD. Informe a carga efetiva da saída posterior.'},
+ {cod:'410',nome:'Importação: diferimento do ICMS no desembaraço e crédito presumido na saída (sem antecipação)',setor:'Importação',tipo:'manual',fundos:4.5,estorna:false,ref:'RICMS/SC, Anexo 2, art. 246',nota:'Contrapartida de 2,5% ao Fundo Social e 2,0% ao FUMDES sobre a exoneração (fonte secundária). Informe a carga efetiva da saída posterior.'},
+ {cod:'411',nome:'Importação: diferimento do ICMS no desembaraço e crédito presumido na saída (com garantia)',setor:'Importação',tipo:'manual',fundos:4.5,estorna:false,ref:'RICMS/SC, Anexo 2, art. 246',nota:'Contrapartida de 2,5% ao Fundo Social e 2,0% ao FUMDES sobre a exoneração (fonte secundária). Informe a carga efetiva da saída posterior.'},
+ {cod:'47',nome:'Confecção',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
+ {cod:'65',nome:'Indústria de informática: crédito presumido',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2, art. 142',nota:NOTA_GEN},
+ {cod:'71',nome:'Indústria de informática: crédito presumido',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2, art. 142',nota:NOTA_GEN},
+ {cod:'105',nome:'Vinho',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
+ {cod:'106',nome:'Embarcações',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
+ {cod:'136',nome:'Arroz beneficiado',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
+ {cod:'194',nome:'Indústria de informática: crédito presumido',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2, art. 142',nota:NOTA_GEN},
+ {cod:'328',nome:'Material reciclável',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
+ {cod:'331',nome:'Abatedores',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
+ {cod:'372',nome:'Confecção',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
+ {cod:'425',nome:'Atividade a confirmar (citado nas portarias dos fundos)',setor:'A confirmar',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
+ {cod:'428',nome:'Atividade a confirmar (citado nas portarias dos fundos)',setor:'A confirmar',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
+ {cod:'1003',nome:'Materiais médicos e veterinários',setor:'Comércio e indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
+ {cod:'1070',nome:'Materiais médicos e veterinários',setor:'Comércio e indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
+ {cod:'4005',nome:'Materiais médicos e veterinários',setor:'Comércio e indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN}
+];
+const TTD_ORD=[...TTDS].sort((a,b)=>(+a.cod)-(+b.cod));
+function ttdPreset(cod){
+  const c=TTD_ORD.find(t=>t.cod===cod);
+  if(c)return {cod:c.cod,nome:c.nome,tipo:c.tipo,pctReceita:'',aliqInter:7,cargaEf:'',fundos:c.fundos,estorna:c.estorna,ref:c.ref,nota:c.nota};
+  return {cod:cod,nome:'',tipo:'manual',pctReceita:'',aliqInter:7,cargaEf:'',fundos:2,estorna:false,ref:'Informado pelo usuário',nota:'TTD informado manualmente: confirme as condições no termo de concessão.'};
+}
+function cardTtd(){
+  const t=S.ttd||(S.ttd={possui:'',itens:[],exclLucro:false}),its=t.itens||[];
+  const bad=its.some(x=>!(+x.pctReceita>0)||(x.tipo!=='p478'&&(x.cargaEf===''||x.cargaEf==null)));
+  const chip=t.possui===''?['warn','Responder']:t.possui==='nao'?['ok','Não possui']:t.possui==='nao_sei'?['warn','Verificar']:(!its.length||bad?['warn','Preencher']:['ok',its.length+' TTD']);
+  let h=`<details class="card step" open id="ttdCard"><summary><div><div class="k">Passo 1 · antes de anexar os documentos</div><h3>A empresa possui algum TTD de Santa Catarina?</h3></div><span class="st-chip ${chip[0]}">${chip[1]}</span></summary><div class="stepbody">
+  <p class="small" style="max-width:74ch">O TTD (Tratamento Tributário Diferenciado) é um benefício de ICMS do estado, como o TTD 478 do e-commerce. Ele vale nos regimes Presumido e Real: no Simples o ICMS vem dentro do DAS. Por isso, se a empresa tem ou poderia ter um TTD, ele entra na comparação.</p>
+  <div class="seg" id="segTtd">${[['nao','Não possui'],['sim','Sim, possui ou pode usar'],['nao_sei','Não sei']].map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${t.possui===v}">${l}</button>`).join('')}</div>`;
+  if(t.possui==='nao_sei')h+=`<div class="banner warn">Consulte o serviço “Consultar TTD” no site da SEF-SC ou o termo de concessão da empresa. Até lá, a comparação é feita sem TTD.</div>`;
+  if(t.possui==='sim'){
+    h+=`<div class="grid" style="align-items:end"><div><label for="ttdSel">Qual TTD?</label><select id="ttdSel">${TTD_ORD.map(c=>`<option value="${c.cod}">TTD ${c.cod} · ${esc(c.nome)}</option>`).join('')}</select></div><div><button class="btn sm" id="ttdAdd" type="button">Adicionar este TTD</button></div></div>
+    <details class="mini" style="margin-top:10px"><summary>O TTD não está na lista</summary><div class="grid" style="align-items:end"><div><label for="ttdOc">Código</label><input id="ttdOc" type="text" placeholder="ex.: 999"></div><div><label for="ttdOn">Descrição</label><input id="ttdOn" type="text" placeholder="ex.: atacadista"></div><div><button class="btn ghost sm" id="ttdAddO" type="button">Adicionar outro TTD</button></div></div></details>`;
+    its.forEach((x,i)=>{const p=`ttd.itens.${i}.`,tab=x.tipo==='p478'?TAB478[+x.aliqInter]:null;
+      h+=`<div class="act" style="margin-top:14px"><div class="row" style="justify-content:space-between"><div><b>TTD ${esc(x.cod)}</b> <span class="small">· ${esc(x.nome||'descrição não informada')}</span></div><button class="lk" type="button" data-ttdrm="${i}">Remover</button></div><div class="grid" style="margin-top:10px">`+
+        fld(p+'pctReceita','% da receita de mercadorias vendida com este TTD',x.pctReceita)+
+        (x.tipo==='p478'?`<div><label for="f-${p}aliqInter">Alíquota interestadual predominante</label><select id="f-${p}aliqInter" data-p="${p}aliqInter">${[[4,'4% (produtos importados)'],[7,'7% (N, NE, CO e ES)'],[12,'12% (S e SE)']].map(([v,l])=>`<option value="${v}" ${+x.aliqInter===v?'selected':''}>${l}</option>`).join('')}</select></div>`:'')+
+        fld(p+'cargaEf','Carga efetiva de ICMS nas vendas com TTD (%)'+(tab!=null?' · sugerida: '+tab:''),x.cargaEf,'number',(tab!=null?`placeholder="${tab}" `:'')+'data-blank="1"')+
+        fld(p+'fundos','Contrapartida a fundos (% do benefício)',x.fundos)+
+        `<div><label for="f-${p}estorna">Estorna créditos de entrada das mercadorias vendidas</label><select id="f-${p}estorna" data-p="${p}estorna" data-b="1"><option value="1" ${x.estorna?'selected':''}>Sim</option><option value="0" ${!x.estorna?'selected':''}>Não</option></select></div></div>
+        <details class="mini" style="margin-top:8px"><summary>Regras e fonte deste TTD</summary><div class="small" style="max-width:80ch">${esc(x.nota||'')}<br><b>Referência:</b> ${esc(x.ref||'')}</div></details></div>`});
+    if(its.length)h+=`<div class="grid" style="margin-top:12px"><div><label for="f-ttd.exclLucro">Excluir o benefício da base do IRPJ e da CSLL no Lucro Real (subvenção para investimento)</label><select id="f-ttd.exclLucro" data-p="ttd.exclLucro" data-b="1"><option value="0" ${!t.exclLucro?'selected':''}>Não (mais conservador)</option><option value="1" ${t.exclLucro?'selected':''}>Sim, se cumpre as condições legais</option></select></div></div><p class="small">A exclusão exige o cumprimento das condições da LC 160/2017 (reserva de incentivos fiscais). Confirme com o contador.</p>`;
+    h+=`<p class="small" style="margin-top:12px">${esc(TTD_FONTE)}</p>`;
+  }
+  return h+`</div></details>`;
+}
+function ligaTtd(){
+  document.querySelectorAll('#segTtd button').forEach(b=>b.onclick=()=>{lerForm();S.ttd=S.ttd||{possui:'',itens:[],exclLucro:false};S.ttd.possui=b.dataset.v;renderDados()});
+  const add=$('#ttdAdd'); if(add)add.onclick=()=>{lerForm();const c=$('#ttdSel').value;S.ttd.itens.push(ttdPreset(c));renderDados()};
+  const ao=$('#ttdAddO'); if(ao)ao.onclick=()=>{const c=$('#ttdOc').value.trim();if(!c)return;lerForm();const it=ttdPreset(c);it.nome=$('#ttdOn').value.trim();S.ttd.itens.push(it);renderDados()};
+  document.querySelectorAll('[data-ttdrm]').forEach(b=>b.onclick=()=>{lerForm();S.ttd.itens.splice(+b.dataset.ttdrm,1);renderDados()});
+}
+
 /* ---------- Formulário ---------- */
 function fld(path,label,val,type,extra){
   type=type||'number';
@@ -2000,8 +2095,9 @@ function renderDados(){
   const frAny=[2026,2027].some(a=>S.anos[a].ativ.some(x=>x.tipo==='serv_fr')),fdAll=faltasDados(norm(S));
   let h=`<h2>Dados da empresa</h2><p class="sub">Informe valores anuais em reais; percentuais em pontos (18 = 18%). Quando houver sazonalidade, cole 12 valores mensais no campo opcional da atividade. Nada é preenchido por suposição: o que ficar em branco vale zero e gera alerta.</p>`;
   {const fd=faltasDados(norm(S));const todos=[...fd.crit,...fd.f];if(todos.length&&!S.example)h+=`<div class="banner warn"><strong>Falta informar (só o que se aplica às suas atividades):</strong><ul class="tight" style="margin-top:8px">${todos.map(t=>'<li>'+esc(t)+'</li>').join('')}</ul></div>`}
+  h+=cardTtd();
   h+=cardImport();
-  h+=`<details class="card step" open><summary><div><div class="k">Passo 2</div><h3>Parâmetros gerais</h3></div><span class="st-chip ok">Pronto</span></summary><div class="stepbody"><div class="grid">`+
+  h+=`<details class="card step" open><summary><div><div class="k">Passo 3</div><h3>Parâmetros gerais</h3></div><span class="st-chip ok">Pronto</span></summary><div class="stepbody"><div class="grid">`+
     fld('socios','Número de sócios',S.socios)+fld('pctDist','% do lucro distribuído',S.pctDist)+
     `<div><label for="f-contabil">Escrituração contábil completa (dividendos sem limite)</label><select id="f-contabil" data-p="contabil" data-b="1"><option value="1" ${S.contabil?'selected':''}>Sim</option><option value="0" ${!S.contabil?'selected':''}>Não</option></select></div>`+
     `<div><label for="f-icmsIntegra">ICMS e ISS integram a base da CBS/IBS (2027)</label><select id="f-icmsIntegra" data-p="icmsIntegra" data-b="1"><option value="1" ${S.icmsIntegra?'selected':''}>Sim (confirmar na LC 214)</option><option value="0" ${!S.icmsIntegra?'selected':''}>Não</option></select></div>`+
@@ -2013,7 +2109,7 @@ function renderDados(){
   for(const a of [2026,2027]){
     const y=S.anos[a],mercY=y.ativ.some(x=>TIPOS[x.tipo].merc),indY=y.ativ.some(x=>x.tipo==='industria'),frY=y.ativ.some(x=>x.tipo==='serv_fr'),ivY=y.ativ.some(x=>x.tipo==='serv_iv');
     const pend=[...fdAll.crit,...fdAll.f].filter(t=>t.includes(String(a))).length;
-    h+=`<details class="card step" open><summary><div><div class="k">Passo ${a===2026?3:4}</div><h3>Projeção ${a}</h3></div><span class="st-chip ${pend?'warn':'ok'}">${pend?pend+' pendência'+(pend>1?'s':''):'Completo'}</span></summary><div class="stepbody">`;
+    h+=`<details class="card step" open><summary><div><div class="k">Passo ${a===2026?4:5}</div><h3>Projeção ${a}</h3></div><span class="st-chip ${pend?'warn':'ok'}">${pend?pend+' pendência'+(pend>1?'s':''):'Completo'}</span></summary><div class="stepbody">`;
     y.ativ.forEach((x,i)=>{
       const p=`anos.${a}.ativ.${i}.`,T=TIPOS[x.tipo];
       h+=`<div class="act"><div class="grid">`+fld(p+'nome','Atividade',x.nome,'text')+
@@ -2045,6 +2141,7 @@ function renderDados(){
   document.querySelectorAll('select[data-s]').forEach(s=>s.onchange=()=>{lerForm();renderDados()});
   $('#btnCalc').onclick=()=>{lerForm();calcular();setTab('res')};
   $('#btnEx').onclick=()=>{S=exemplo();renderDados();calcular()};
+  ligaTtd();
   ligaDocs();
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{lerForm();S.anos[b.dataset.add].ativ.push({nome:'Nova atividade',tipo:'comercio',anual:0,mensal:'',aliqICMS:0,aliqISS:0,pctST:0,pctMono:0,pctExp:0,pctB2B:0,red:0});S.example=false;renderDados()});
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{lerForm();const [a,i]=b.dataset.del.split(':');if(S.anos[a].ativ.length>1){S.anos[a].ativ.splice(+i,1);renderDados()}});
@@ -2054,7 +2151,7 @@ function lerForm(){
   document.querySelectorAll('[data-p]').forEach(el=>{
     let v=el.value;
     if(el.dataset.b)v=v==='1';
-    else if(el.type==='number')v=v===''?0:parseFloat(v);
+    else if(el.type==='number')v=v===''?(el.dataset.blank?'':0):parseFloat(v);
     setPath(S,el.dataset.p,v);
   });
   S.example=false;

@@ -835,7 +835,7 @@ function aplicarPGDAS(r,completo,m25){
 }
 function ligaPGDAS(){
   const f=$('#pgFile'); if(!f)return;
-  const proc=txt=>{pgState=lerPGDAS(txt);pgRender()};
+  const proc=txt=>{pgState=lerPGDAS(txt);ui.pgMeses=pgState&&!pgState.erro?pgState.meses:null;pgRender();xmlRender()};
   f.onchange=async()=>{
     const file=f.files[0]; if(!file)return;
     const o=$('#pgOut'); o.innerHTML='<p class="small">Lendo o arquivo…</p>';
@@ -848,6 +848,216 @@ function ligaPGDAS(){
   pgRender();
 }
 
+/* ---------- Importar notas fiscais (XML) ---------- */
+let xmlState=null;
+const dig=s=>String(s||'').replace(/\D/g,'');
+const fmtCnpj=c=>c.length===14?c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'):c;
+const xq=(el,t)=>el?el.getElementsByTagNameNS('*',t)[0]||null:null;
+const xt=(el,t)=>{const n=xq(el,t);return n?n.textContent.trim():''};
+const xn=(el,t)=>{const v=parseFloat(xt(el,t));return isNaN(v)?0:v};
+function lerXml(text,ign){
+  const d=new DOMParser().parseFromString(text,'application/xml');
+  if(d.getElementsByTagName('parsererror').length){ign.invalidos++;return null}
+  const root=d.documentElement,rn=root.localName;
+  if(/^(procEventoNFe|envEvento|evento|retEnvEvento)$/.test(rn)){
+    const ev=xq(root,'evento'),inf=ev?xq(ev,'infEvento'):xq(root,'infEvento');
+    const ret=xq(root,'retEvento'),cs=ret?xt(ret,'cStat'):'135';
+    if(inf&&xt(inf,'tpEvento')==='110111'&&['135','136','155'].includes(cs))return {cancel:xt(inf,'chNFe')};
+    ign.eventos++;return null;
+  }
+  const inf=xq(root,'infNFe');
+  if(!inf){ if(/nfse|CompNfse|InfNfse|GerarNfse/i.test(rn+(root.innerHTML||'').slice(0,300)))ign.nfse++; else ign.outros++; return null }
+  const ide=xq(inf,'ide'),emit=xq(inf,'emit'),dest=xq(inf,'dest'),prot=xq(root,'infProt');
+  const dh=xt(ide,'dhEmi')||xt(ide,'dEmi');
+  const doc={chave:(inf.getAttribute('Id')||'').replace(/^NFe/,'')||xt(root,'chNFe'),mod:xt(ide,'mod'),tpNF:xt(ide,'tpNF'),
+    dh:dh.slice(0,10),cStat:prot?xt(prot,'cStat'):null,emit:dig(xt(emit,'CNPJ'))||dig(xt(emit,'CPF')),crt:xt(emit,'CRT'),
+    dest:dig(xt(dest,'CNPJ'))||dig(xt(dest,'CPF')),itens:[]};
+  for(const det of inf.getElementsByTagNameNS('*','det')){
+    const p=xq(det,'prod'),im=xq(det,'imposto'),icms=xq(im,'ICMS'),ig=icms?icms.firstElementChild:null,pis=xq(im,'PIS'),pg=pis?pis.firstElementChild:null;
+    if(xt(p,'indTot')==='0')continue;
+    doc.itens.push({cfop:xt(p,'CFOP'),vProd:xn(p,'vProd'),vFrete:xn(p,'vFrete'),vSeg:xn(p,'vSeg'),vOutro:xn(p,'vOutro'),vDesc:xn(p,'vDesc'),
+      vIPI:xn(xq(im,'IPI'),'vIPI'),icmsCst:ig?(xt(ig,'CST')||xt(ig,'CSOSN')):'',vICMS:ig?xn(ig,'vICMS'):0,vST:ig?xn(ig,'vICMSST'):0,
+      vCredSN:ig?xn(ig,'vCredICMSSN'):0,pisCst:pg?xt(pg,'CST'):''});
+  }
+  return doc;
+}
+function classeCfop(cfop,dir){
+  const t=+String(cfop).slice(1),p=String(cfop)[0],r=(a,b)=>t>=a&&t<=b;
+  if(r(151,159))return 'transf';
+  if(r(201,210)||t===410||t===411)return dir==='saida'?'devol_compra':'devol_venda';
+  if(dir==='saida'){
+    if(t===933)return 'servico';
+    if(r(551,557)||t===406||t===407||r(900,949)||r(501,505))return 'outras';
+    if(r(100,199)||r(400,499))return 'receita';
+    return 'outras';
+  }
+  if([551,552,553,554,555,406].includes(t))return 'ativo';
+  if([556,557,407].includes(t))return 'uso_consumo';
+  if(r(900,949))return 'outras';
+  if(r(100,199)||r(400,499))return 'insumo_revenda';
+  return 'outras';
+}
+const INDUSTRIA=[101,103,109,111,113,115,116,401,402];
+const CST_CRED=['00','10','20','51','70','90'];
+function agregarXml(st){
+  const cn=st.cnpj.length>=14?st.cnpj.slice(0,8):st.cnpj, same=c=>!!c&&(cn.length===8?c.slice(0,8)===cn:c===cn);
+  const seen=new Set(),por={},c={dup:0,canc:0,naoAut:0,terceiros:0,semItens:0};
+  const mk=()=>({rec:{},recTipo:{comercio:0,industria:0,servico:0},st:0,mono:0,exp:0,eligBase:0,icmsVal:0,devol:{},devCompra:0,
+    compras:{},comprasTot:0,icmsCred:0,baseCredPC:0,baseCredCBS:0,fornSimples:0,uso:0,ativo:0,outras:0,nSaida:0,nEntrada:0,meses:new Set()});
+  for(const d of st.docs){
+    if(seen.has(d.chave)){c.dup++;continue} seen.add(d.chave);
+    if(st.cancel.has(d.chave)){c.canc++;continue}
+    if(d.cStat&&!['100','150'].includes(d.cStat)){c.naoAut++;continue}
+    let dir=null; if(same(d.emit))dir=d.tpNF==='1'?'saida':'entrada'; else if(same(d.dest))dir='entrada';
+    if(!dir){c.terceiros++;continue}
+    const ano=d.dh.slice(0,4),mes=d.dh.slice(5,7); if(!ano)continue;
+    const Y=por[ano]=por[ano]||mk(); Y.meses.add(mes);
+    dir==='saida'?Y.nSaida++:Y.nEntrada++;
+    for(const it of d.itens){
+      const base=it.vProd+it.vFrete+it.vSeg+it.vOutro-it.vDesc, custo=base+it.vIPI+it.vST, k=classeCfop(it.cfop,dir), cf=+String(it.cfop).slice(1);
+      if(k==='receita'||k==='servico'){
+        Y.rec[mes]=(Y.rec[mes]||0)+base;
+        const tipo=k==='servico'?'servico':INDUSTRIA.includes(cf)?'industria':'comercio'; Y.recTipo[tipo]+=base;
+        const ex=String(it.cfop)[0]==='7',stt=it.icmsCst==='60'||it.icmsCst==='500',mo=it.pisCst==='04';
+        if(ex)Y.exp+=base; if(stt)Y.st+=base; if(mo)Y.mono+=base;
+        if(k==='receita'&&!ex&&!stt){Y.eligBase+=base;Y.icmsVal+=it.vICMS}
+      }else if(k==='devol_venda'){Y.devol[mes]=(Y.devol[mes]||0)+base}
+      else if(k==='devol_compra'){Y.devCompra+=custo}
+      else if(k==='insumo_revenda'){
+        Y.comprasTot+=custo; Y.compras[mes]=(Y.compras[mes]||0)+custo;
+        const cr=CST_CRED.includes(it.icmsCst)?it.vICMS:0;
+        Y.icmsCred+=cr+it.vCredSN;
+        if(!['04','05','06','07','08','09'].includes(it.pisCst))Y.baseCredPC+=Math.max(0,base-cr);
+        if(d.crt==='3')Y.baseCredCBS+=custo; else Y.fornSimples+=custo;
+      }else if(k==='uso_consumo'){Y.uso+=custo; if(d.crt==='3')Y.baseCredCBS+=custo; else Y.fornSimples+=custo}
+      else if(k==='ativo'){Y.ativo+=custo}
+      else if(k==='outras'){Y.outras+=base}
+    }
+  }
+  return {por,c};
+}
+function detectarCnpj(docs){
+  const n={}; for(const d of docs){for(const k of [d.emit,d.dest]){if(k&&k.length===14)n[k]=(n[k]||0)+1}}
+  const e=Object.entries(n).sort((a,b)=>b[1]-a[1]); return e.length?e[0][0]:'';
+}
+async function lerArquivosXml(files,prog){
+  const ign={invalidos:0,nfse:0,outros:0,eventos:0,naoXml:0},docs=[],cancel=new Set();
+  const txts=[];
+  for(const f of files){
+    const nm=(f.webkitRelativePath||f.name).toLowerCase();
+    if(nm.endsWith('.zip')){
+      if(!window.JSZip)await new Promise((ok,err)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';s.onload=ok;s.onerror=()=>err(new Error('Não consegui carregar o leitor de ZIP (verifique a internet).'));document.head.appendChild(s)});
+      const z=await window.JSZip.loadAsync(await f.arrayBuffer());
+      for(const e of Object.values(z.files)){if(!e.dir&&e.name.toLowerCase().endsWith('.xml'))txts.push(()=>e.async('string'))}
+    }else if(nm.endsWith('.xml'))txts.push(()=>f.text());
+    else ign.naoXml++;
+  }
+  let i=0;
+  for(const g of txts){
+    const r=lerXml(await g(),ign); i++;
+    if(r){r.cancel?cancel.add(r.cancel):docs.push(r)}
+    if(i%100===0){prog(i,txts.length);await new Promise(r=>setTimeout(r))}
+  }
+  return {docs,cancel,ign,total:txts.length};
+}
+function cardXml(){
+  return `<div class="card"><h3 style="margin-top:0">Importar notas fiscais (XML)</h3>
+  <p class="small">Envie os XMLs de NF-e e NFC-e emitidas (saída) e recebidas (entrada), de um ou mais meses, em arquivos soltos, numa pasta ou num .zip. O programa separa vendas, devoluções e compras, estima ICMS-ST, monofásico, exportação e créditos de entrada, e compara a receita mensal com o extrato do PGDAS-D. A leitura acontece no seu navegador; nada é enviado.</p>
+  ${ui.xmlMsg?`<div class="banner ok">${esc(ui.xmlMsg)}</div>`:''}
+  <div class="row"><label style="margin:0">XMLs ou ZIP <input id="xmlFiles" type="file" multiple accept=".xml,.zip,text/xml,application/zip" style="width:auto;max-width:100%"></label>
+  <label style="margin:0">Pasta <input id="xmlDir" type="file" webkitdirectory multiple style="width:auto;max-width:100%"></label></div>
+  <div id="xmlOut" style="margin-top:12px"></div></div>`;
+}
+function xmlRender(){
+  const o=$('#xmlOut'); if(!o)return; const st=xmlState; if(!st){o.innerHTML='';return}
+  if(st.erro){o.innerHTML=`<div class="banner bad">${esc(st.erro)}</div>`;return}
+  const ign=st.ign;
+  if(!st.docs.length){o.innerHTML=`<div class="banner warn">Nenhuma NF-e ou NFC-e lida. ${ign.nfse?ign.nfse+' arquivo(s) parecem NFS-e (serviço), que ainda não leio. ':''}${ign.outros+ign.invalidos+ign.naoXml?'Ignorados: '+(ign.outros+ign.invalidos+ign.naoXml)+' arquivo(s) de outro tipo ou inválidos.':''}</div>`;return}
+  const cn=dig(st.cnpj); const {por,c}=cn.length>=8?agregarXml({...st,cnpj:cn}):{por:{},c:{}};
+  const anos=Object.keys(por).sort(); if(!st.ano||!por[st.ano])st.ano=anos[anos.length-1];
+  const Y=por[st.ano];
+  let h=`<div class="card" style="margin:0"><h3 style="margin-top:0">O que foi lido</h3>
+  <p>${st.docs.length} nota(s) lida(s)${ign.nfse?'; '+ign.nfse+' NFS-e ignorada(s) (ainda não leio serviço)':''}${st.cancel.size?'; '+st.cancel.size+' cancelamento(s) encontrado(s)':''}${ign.outros+ign.invalidos+ign.naoXml?'; '+(ign.outros+ign.invalidos+ign.naoXml)+' arquivo(s) de outro tipo ignorado(s)':''}.</p>
+  <div class="grid"><div><label for="xmlCnpj">CNPJ da empresa (detectado, confira)</label><input id="xmlCnpj" type="text" value="${esc(fmtCnpj(st.cnpj))}"></div>
+  <div><label for="xmlAno">Ano a usar</label><select id="xmlAno">${anos.map(a=>`<option ${a===st.ano?'selected':''}>${a}</option>`).join('')}</select></div></div>`;
+  if(!Y){o.innerHTML=h+`<div class="banner bad">Nenhuma nota encontrada para esse CNPJ. Confira o número.</div></div>`;wireXml();return}
+  const nm=Y.meses.size, ms=[...Array(12)].map((_,i)=>String(i+1).padStart(2,'0'));
+  const pgm=ui.pgMeses||null;
+  const liq=m=>(Y.rec[m]||0)-(Y.devol[m]||0);
+  h+=`<div class="small">Contadas: ${c.dup} duplicada(s), ${c.canc} cancelada(s), ${c.naoAut} não autorizada(s), ${c.terceiros} de terceiros (não envolvem este CNPJ).</div>
+  <h3>Receita e compras por mês de ${st.ano}</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Receita nas notas (líquida de devoluções)</th>${pgm?'<th>Receita no extrato PGDAS</th><th>Diferença</th>':''}<th>Compras (insumos e revenda)</th></tr></thead><tbody>`;
+  for(const m of ms){
+    if(!Y.meses.has(m))continue; const v=liq(m), e=pgm?pgm[st.ano+'-'+m]:undefined, d=e===undefined?null:v-e;
+    h+=`<tr><td>${m}/${st.ano}</td><td class="n">${brl2(v)}</td>${pgm?`<td class="n">${e===undefined?'—':brl2(e)}</td><td class="n">${d===null?'—':(Math.abs(d)<=1?'<span class="tag good">confere</span>':'<span class="tag bad">'+brl2(d)+'</span>')}</td>`:''}<td class="n">${brl2(Y.compras[m]||0)}</td></tr>`;
+  }
+  const rec=sum(Object.values(Y.rec)),dev=sum(Object.values(Y.devol));
+  h+=`</tbody></table></div>`;
+  if(!pgm)h+=`<p class="small">Leia também o extrato do PGDAS-D (cartão acima) para comparar a receita mensal das notas com a declarada.</p>`;
+  const aliq=Y.eligBase>0?Y.icmsVal/Y.eligBase:0;
+  h+=`<h3>Totais de ${st.ano}</h3><div class="scroll"><table><tbody>
+  <tr><td>Receita bruta nas notas de saída</td><td class="n">${brl2(rec)}</td></tr>
+  <tr><td>Devoluções de venda</td><td class="n">${brl2(dev)}</td></tr>
+  <tr><td>Parcela com ICMS-ST (substituído)</td><td class="n">${rec?pc(Y.st/rec):'—'}</td></tr>
+  <tr><td>Parcela monofásica (PIS/COFINS)</td><td class="n">${rec?pc(Y.mono/rec):'—'}</td></tr>
+  <tr><td>Parcela de exportação</td><td class="n">${rec?pc(Y.exp/rec):'—'}</td></tr>
+  <tr><td>Alíquota efetiva de ICMS destacada nas vendas</td><td class="n">${Y.icmsVal>0?pc(aliq):'não destacada nas notas'}</td></tr>
+  <tr><td>Compras de insumos e revenda (valor da nota)</td><td class="n">${brl2(Y.comprasTot)}</td></tr>
+  <tr><td>ICMS creditável nas entradas</td><td class="n">${brl2(Y.icmsCred)}</td></tr>
+  <tr><td>Base de crédito de PIS/COFINS (estimada)</td><td class="n">${brl2(Y.baseCredPC)}</td></tr>
+  <tr><td>Base de crédito de CBS/IBS (fornecedores do regime normal)</td><td class="n">${brl2(Y.baseCredCBS)}</td></tr>
+  <tr><td>Compras de fornecedores do Simples (crédito limitado)</td><td class="n">${brl2(Y.fornSimples)}</td></tr>
+  <tr><td>Uso e consumo</td><td class="n">${brl2(Y.uso)}</td></tr>
+  <tr><td>Ativo imobilizado</td><td class="n">${brl2(Y.ativo)}</td></tr>
+  </tbody></table></div>`;
+  if(Y.icmsVal===0&&Y.eligBase>0)h+=`<div class="banner warn">As notas de saída não destacam ICMS, o que é normal para empresa do Simples. A alíquota de ICMS por atividade precisa ser informada à mão.</div>`;
+  if(nm<12)h+=`<div class="banner warn">As notas cobrem ${nm} de 12 meses de ${st.ano}. <label style="display:inline;color:inherit"><input id="xmlAnual" type="checkbox" ${st.anual?'checked':''}> Projetar o ano pela média dos meses lidos (hipótese: multiplica por ${nm>0?(12/nm).toFixed(2).replace('.',','):'—'})</label></div>`;
+  h+=`<div class="banner warn">Estimativas a conferir: o monofásico depende do CST de PIS informado na nota; a base de crédito de CBS/IBS usa o valor da nota e ainda precisa ser conferida com a LC 214; compras de uso e consumo vão para despesas; ativo imobilizado não é aplicado.</div>
+  <p class="small">Ao aplicar, as atividades, as compras, os créditos e as despesas de 2026 e 2027 são preenchidos com esses valores, como ponto de partida. ${st.ano==='2025'&&nm===12?'Como são 12 meses de 2025, o histórico também é preenchido. ':''}Dados já digitados nesses campos são substituídos; os demais campos são mantidos.</p>
+  <div class="row"><button class="btn" id="xmlAplicar" type="button">Aplicar aos dados</button><button class="btn ghost" id="xmlDescartar" type="button">Descartar</button></div></div>`;
+  o.innerHTML=h; wireXml(Y,nm);
+}
+function wireXml(Y,nm){
+  const st=xmlState;
+  const cn=$('#xmlCnpj'); if(cn)cn.onchange=()=>{st.cnpj=dig(cn.value);xmlRender()};
+  const an=$('#xmlAno'); if(an)an.onchange=()=>{st.ano=an.value;xmlRender()};
+  const au=$('#xmlAnual'); if(au)au.onchange=()=>{st.anual=au.checked;xmlRender()};
+  const d=$('#xmlDescartar'); if(d)d.onclick=()=>{xmlState=null;xmlRender()};
+  const a=$('#xmlAplicar'); if(a)a.onclick=()=>aplicarXml(Y,nm);
+}
+function aplicarXml(Y,nm){
+  const st=xmlState,f=(st.anual&&nm<12&&nm>0)?12/nm:1,r2=v=>Math.round(v*100)/100;
+  if(S.example)S=vazio();
+  const rec=sum(Object.values(Y.rec)),dev=sum(Object.values(Y.devol)),aliq=Y.eligBase>0?Y.icmsVal/Y.eligBase*100:0;
+  const tipos=Object.entries(Y.recTipo).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  if(!tipos.length)return;
+  const ativ=tipos.map(([t,v],i)=>{
+    const liq=Math.max(0,v-(i===0?dev:0)), tp=t==='servico'?'serv_fr':t;
+    return {nome:TIPOS[tp].rot,tipo:tp,anual:r2(liq*f),mensal:'',aliqICMS:t==='servico'?0:r2(aliq),aliqISS:0,
+      pctST:r2(rec?Y.st/rec*100:0),pctMono:r2(rec?Y.mono/rec*100:0),pctExp:r2(rec?Y.exp/rec*100:0),pctB2B:0,red:0};
+  });
+  for(const a of [2026,2027]){
+    const y=S.anos[a]; y.ativ=JSON.parse(JSON.stringify(ativ));
+    y.compras=r2(Y.comprasTot*f); y.icmsCred=r2(Y.icmsCred*f); y.baseCredPC=r2(Y.baseCredPC*f); y.baseCredCBS=r2(Y.baseCredCBS*f); y.despesas=r2(Y.uso*f);
+  }
+  if(st.ano==='2025'&&nm===12){S.histRec=r2(rec-dev); S.histRecMensal=[...Array(12)].map((_,i)=>{const m=String(i+1).padStart(2,'0');return ((Y.rec[m]||0)-(Y.devol[m]||0)).toFixed(2).replace('.',',')}).join('; ')}
+  S.example=false; xmlState=null;
+  ui.xmlMsg='Notas aplicadas. Falta informar o pessoal, o ISS, os custos acessórios e conferir os valores estimados; depois clique em Calcular.';
+  renderDados(); calcular(); setTab('dados'); window.scrollTo(0,0);
+}
+function ligaXml(){
+  const go=async files=>{
+    if(!files||!files.length)return;
+    const o=$('#xmlOut'); o.innerHTML='<p class="small" id="xmlProg">Lendo os arquivos…</p>';
+    try{
+      const r=await lerArquivosXml([...files],(i,n)=>{const p=$('#xmlProg');if(p)p.textContent='Lendo '+i+' de '+n+'…'});
+      xmlState={docs:r.docs,cancel:r.cancel,ign:r.ign,cnpj:detectarCnpj(r.docs),ano:null,anual:false};
+    }catch(e){xmlState={erro:'Não consegui ler os arquivos ('+(e&&e.message?e.message:'erro')+').'}}
+    xmlRender();
+  };
+  const f=$('#xmlFiles'),d=$('#xmlDir'); if(!f)return;
+  f.onchange=()=>go(f.files); d.onchange=()=>go(d.files); xmlRender();
+}
+
 /* ---------- Formulário ---------- */
 function fld(path,label,val,type,extra){
   type=type||'number';
@@ -856,6 +1066,7 @@ function fld(path,label,val,type,extra){
 function renderDados(){
   let h=`<h2>Dados da empresa</h2><p class="sub">Informe valores anuais em reais; percentuais em pontos (18 = 18%). Quando houver sazonalidade, cole 12 valores mensais no campo opcional da atividade. Nada é preenchido por suposição: o que ficar em branco vale zero e gera alerta.</p>`;
   h+=cardImport();
+  h+=cardXml();
   h+=`<div class="card"><h3 style="margin-top:0">Parâmetros gerais</h3><div class="grid">`+
     fld('socios','Número de sócios',S.socios)+fld('pctDist','% do lucro distribuído',S.pctDist)+
     `<div><label for="f-contabil">Escrituração contábil completa (dividendos sem limite)</label><select id="f-contabil" data-p="contabil" data-b="1"><option value="1" ${S.contabil?'selected':''}>Sim</option><option value="0" ${!S.contabil?'selected':''}>Não</option></select></div>`+
@@ -899,6 +1110,7 @@ function renderDados(){
   $('#btnCalc').onclick=()=>{lerForm();calcular();setTab('res')};
   $('#btnEx').onclick=()=>{S=exemplo();renderDados();calcular()};
   ligaPGDAS();
+  ligaXml();
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{lerForm();S.anos[b.dataset.add].ativ.push({nome:'Nova atividade',tipo:'comercio',anual:0,mensal:'',aliqICMS:0,aliqISS:0,pctST:0,pctMono:0,pctExp:0,pctB2B:0,red:0});S.example=false;renderDados()});
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{lerForm();const [a,i]=b.dataset.del.split(':');if(S.anos[a].ativ.length>1){S.anos[a].ativ.splice(+i,1);renderDados()}});
 }

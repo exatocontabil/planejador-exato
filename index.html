@@ -650,6 +650,204 @@ function renderRisk(){
   $('#p-risk').innerHTML=h;
 }
 
+//PGDAS_START
+const NUM='[\\d.]+,\\d{2}';
+const num=s=>parseFloat(String(s).replace(/\./g,'').replace(',','.'));
+function itensParaTexto(items){
+  const L=new Map();
+  for(const it of items){ if(!it.str||!it.str.trim())continue; const y=Math.round(it.transform[5]/3); if(!L.has(y))L.set(y,[]); L.get(y).push({x:it.transform[4],s:it.str}); }
+  return [...L.entries()].sort((a,b)=>b[0]-a[0]).map(([,v])=>v.sort((a,b)=>a.x-b.x).map(o=>o.s).join(' ')).join('\n');
+}
+function tipoDaAtividade(d){
+  const t=d.toLowerCase();
+  const exp=/para o exterior/.test(t)&&!/exceto para o exterior/.test(t);
+  let tipo=null;
+  if(/revenda de mercadorias/.test(t))tipo='comercio';
+  else if(/industrializ/.test(t))tipo='industria';
+  else if(/loca[cç][aã]o de bens m[oó]veis/.test(t))tipo='loc_movel';
+  else if(/servi[cç]os?/.test(t)){
+    if(/fator r|anexo iii ou v|iii e v/.test(t))tipo='serv_fr';
+    else if(/anexo iv/.test(t))tipo='serv_iv';
+    else if(/anexo iii/.test(t))tipo='serv_iii';
+    else if(/anexo v/.test(t))tipo='serv_v';
+    else tipo='serv_fr';
+  }
+  return {tipo,exp};
+}
+function lerPGDAS(raw){
+  const T=String(raw).replace(/\s+/g,' ');
+  const r={avisos:[],blocos:[],meses:{},folha:[]};
+  let x=T.match(/Per[ií]odo de Apura[cç][aã]o \(PA\): (\d{2})\/(\d{4})/);
+  if(!x||!/Extrato do Simples Nacional/i.test(T))return {erro:'O texto não parece um extrato do PGDAS-D (não encontrei “Período de Apuração (PA)”).'};
+  r.pa={mes:+x[1],ano:+x[2]};
+  x=T.match(/Optante pelo Simples Nacional: (Sim|Não)/); r.optante=x?x[1]:null;
+  x=T.match(/Regime de Apura[cç][aã]o: ([^ ]+)/); r.regime=x?x[1]:null;
+  x=T.match(/Munic[ií]pio: (.+?) UF: (\w{2})/); r.local=x?x[1]+'/'+x[2]:null;
+  x=T.match(/Impedido de recolher ICMS\/ISS no DAS: (Sim|Não)/); r.impedido=x?x[1]:null;
+  x=T.match(new RegExp('Receita Bruta do PA \\(RPA\\) - (?:Compet[eê]ncia|Caixa) ('+NUM+') ('+NUM+') ('+NUM+')'));
+  if(!x)return {erro:'Não encontrei a Receita Bruta do PA (RPA) no texto.'};
+  r.rpa={int:num(x[1]),ext:num(x[2]),tot:num(x[3])};
+  x=T.match(new RegExp('doze meses anteriores ao PA ('+NUM+') ('+NUM+') ('+NUM+')'))||T.match(new RegExp('\\(RBT12\\) ('+NUM+') ('+NUM+') ('+NUM+')'));
+  if(!x)return {erro:'Não encontrei a RBT12 no texto.'};
+  r.rbt12=num(x[3]);
+  const sec=(a,b)=>{const i=T.indexOf(a);if(i<0)return '';const j=b?T.indexOf(b,i+a.length):-1;return T.slice(i,j<0?undefined:j)};
+  const ch=m=>String(m).padStart(2,'0');
+  r.meses[r.pa.ano+'-'+ch(r.pa.mes)]=r.rpa.tot;
+  const s1=sec('2.2.1)','2.2.2)'), s2=sec('2.2.2)','2.3)'), re=new RegExp('(\\d{2})/(\\d{4}) ('+NUM+')','g');
+  for(const mm of s1.matchAll(re)){const k=mm[2]+'-'+mm[1];r.meses[k]=(r.meses[k]||0)+num(mm[3])}
+  for(const mm of s2.matchAll(re)){const k=mm[2]+'-'+mm[1];r.meses[k]=(r.meses[k]||0)+num(mm[3])}
+  const s3=sec('2.3)','2.4)');
+  if(!/Nenhuma/i.test(s3))for(const mm of s3.matchAll(re))r.folha.push({k:mm[2]+'-'+mm[1],v:num(mm[3])});
+  x=T.match(/Fator r = (N[ãa]o se aplica|[\d.,]+ ?%?)/i);
+  r.frTxt=x?x[1].trim():null; r.fr=null;
+  if(r.frTxt&&/\d/.test(r.frTxt)){let v=num(r.frTxt.replace('%',''));r.fr=/%/.test(r.frTxt)||v>1?v/100:v}
+  const partes=T.split('Valor do Débito por Tributo para a Atividade (R$):').slice(1);
+  for(let p of partes){
+    for(const k of ['Informações por Estabelecimento','Valor Informado:','Total do Débito Declarado'])
+      {const i=p.indexOf(k);if(i>=0)p=p.slice(0,i)}
+    const d=p.match(new RegExp('^(.*?) Receita Bruta Informada: R\\$ ('+NUM+')'));
+    if(!d){r.avisos.push('Um bloco de atividade não pôde ser lido e foi ignorado.');continue}
+    const b={desc:d[1].trim(),rev:num(d[2]),st:0,mono:0,parcelas:[]};
+    const c=tipoDaAtividade(b.desc); b.tipo=c.tipo; b.exp=c.exp;
+    for(const mm of p.matchAll(new RegExp('Parcela (\\d+): R\\$ ('+NUM+')(.*?)(?= Parcela \\d+: R\\$|$)','g'))){
+      const v=num(mm[2]),tail=mm[3];
+      if(/substitui[cç][aã]o tribut[aá]ria de/i.test(tail))b.st+=v;
+      if(/monof[aá]sica de/i.test(tail))b.mono+=v;
+      b.parcelas.push({v,tail:tail.trim()});
+    }
+    const t=p.match(new RegExp('IRPJ CSLL COFINS PIS/Pasep INSS/CPP ICMS IPI ISS Total ((?:'+NUM+' ){8}'+NUM+')'));
+    b.das=t?num(t[1].split(' ')[8]):null;
+    if(!b.tipo)r.avisos.push('Atividade não reconhecida: “'+b.desc.slice(0,80)+'…”. Escolha o tipo manualmente.');
+    r.blocos.push(b);
+  }
+  if(!r.blocos.length)r.avisos.push('Nenhuma atividade encontrada no extrato.');
+  x=T.match(new RegExp('Total do Débito Declarado \\(exigível \\+ suspenso\\)(?: \\(R\\$\\))? IRPJ CSLL COFINS PIS/Pasep INSS/CPP ICMS IPI ISS Total ((?:'+NUM+' ){8}'+NUM+')'));
+  r.dasExtrato=x?num(x[1].split(' ')[8]):null;
+  return r;
+}
+function consolidarPGDAS(r){
+  const g={}; let tot=0;
+  for(const b of r.blocos){const t=b.tipo||'comercio'; g[t]=g[t]||{tipo:t,rev:0,st:0,mono:0,exp:0}; g[t].rev+=b.rev; g[t].st+=b.st; g[t].mono+=b.mono; if(b.exp)g[t].exp+=b.rev; tot+=b.rev}
+  return Object.values(g).map(a=>({tipo:a.tipo,rev:a.rev,share:tot?a.rev/tot:0,pctST:a.rev?a.st/a.rev*100:0,pctMono:a.rev?a.mono/a.rev*100:0,pctExp:a.rev?a.exp/a.rev*100:0}));
+}
+function dasPA(r){
+  let tot=0;
+  for(const b of r.blocos){
+    const tp=b.tipo||'comercio',T=TIPOS[tp]; let an=T.anexo;
+    if(an==='III/V'){ if(r.fr==null)return null; an=r.fr>=.28?'III':'V' }
+    const e=efetiva(an,r.rbt12),A=ANEXOS[an],row=A.rows[e.k];
+    const st=b.rev?b.st/b.rev:0, mo=b.rev?b.mono/b.rev:0, ex=b.exp?1:0;
+    A.cols.forEach((c,j)=>{
+      const f={ICMS:(1-st)*(1-ex),ISS:T.semISS?0:(1-ex),PIS:(1-mo)*(1-ex),COFINS:(1-mo)*(1-ex),IPI:1-ex}[c];
+      tot+=b.rev*(e.er*row[j]/100)*(f===undefined?1:f);
+    });
+  }
+  return tot;
+}
+//PGDAS_END
+/* ---------- Importar extrato do PGDAS-D ---------- */
+let pgState=null;
+const PGURL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+function loadPdfJs(){
+  return new Promise((ok,err)=>{
+    if(window.pdfjsLib)return ok(window.pdfjsLib);
+    const s=document.createElement('script'); s.src=PGURL+'pdf.min.js';
+    s.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc=PGURL+'pdf.worker.min.js';ok(window.pdfjsLib)};
+    s.onerror=()=>err(new Error('Não consegui carregar o leitor de PDF (verifique a internet).'));
+    document.head.appendChild(s);
+  });
+}
+async function pdfTexto(file){
+  const lib=await loadPdfJs();
+  const doc=await lib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  let out='';
+  for(let p=1;p<=doc.numPages;p++){const pg=await doc.getPage(p);const tc=await pg.getTextContent();out+=itensParaTexto(tc.items)+'\n'}
+  return out;
+}
+function vazio(){
+  const y=()=>({ativ:[],salarios:0,prolabore:0,rat:0,terc:0,compras:0,icmsCred:0,baseCredPC:0,baseCredCBS:0,despesas:0,adicoes:0,prejuizo:0,ipi:0,acess:{simples:0,hibrido:0,presumido:0,real:0}});
+  return {example:false,socios:S.socios||1,pctDist:S.pctDist||100,contabil:S.contabil,icmsIntegra:S.icmsIntegra,cbs:S.cbs,histRec:0,histRecMensal:'',histFolha:0,anos:{2026:y(),2027:y()}};
+}
+function cardImport(){
+  return `<div class="card"><h3 style="margin-top:0">Importar extrato do PGDAS-D</h3>
+  <p class="small">Baixe o “Extrato do Simples Nacional” da apuração mais recente no Portal do Simples e envie o PDF aqui. A leitura acontece no seu navegador; o arquivo não é enviado a ninguém. Se o PDF não abrir, abra-o, use Ctrl+A e Ctrl+C e cole o texto na caixa.</p>
+  ${ui.pgMsg?`<div class="banner ok">${esc(ui.pgMsg)}</div>`:''}
+  <div class="row"><input id="pgFile" type="file" accept=".pdf,.txt,application/pdf,text/plain" style="width:auto;max-width:100%"><button class="btn ghost" id="pgLer" type="button">Ler texto colado</button></div>
+  <label for="pgTxt" style="margin-top:10px">Ou cole aqui o texto do extrato</label><textarea id="pgTxt" placeholder="Extrato do Simples Nacional ..."></textarea>
+  <div id="pgOut" style="margin-top:12px"></div></div>`;
+}
+function pgRender(){
+  const r=pgState,o=$('#pgOut'); if(!o)return;
+  if(!r){o.innerHTML='';return}
+  if(r.erro){o.innerHTML=`<div class="banner bad">${esc(r.erro)}</div>`;return}
+  const ch=m=>String(m).padStart(2,'0');
+  const m25=[...Array(12)].map((_,i)=>r.meses['2025-'+ch(i+1)]);
+  const completo=m25.every(v=>v!==undefined);
+  const cons=consolidarPGDAS(r);
+  const calc=dasPA(r);
+  let conf='';
+  if(calc===null)conf=`<span class="tag warn">Sem conferência</span> O extrato não informa o fator r; não dá para escolher entre os Anexos III e V.`;
+  else if(r.dasExtrato===null)conf=`<span class="tag warn">Sem conferência</span> Não encontrei o total do débito no extrato.`;
+  else{const d=calc-r.dasExtrato;
+    conf=Math.abs(d)<=1?`<span class="tag good">Confere</span> DAS do período: o programa calculou ${brl2(calc)} e o extrato mostra ${brl2(r.dasExtrato)} (diferença ${brl2(d)}). As tabelas de alíquota e partilha usadas para esse anexo e faixa batem com a apuração oficial.`
+      :`<span class="tag bad">Diverge</span> DAS do período: o programa calculou ${brl2(calc)} e o extrato mostra ${brl2(r.dasExtrato)} (diferença ${brl2(d)}). Confira o tipo de cada atividade abaixo; se estiver certo, a tabela do programa precisa de revisão.`}
+  const tipos=Object.entries(TIPOS);
+  let h=`<div class="card" style="margin:0"><h3 style="margin-top:0">O que foi lido</h3><div class="scroll"><table><tbody>
+   <tr><td>Período de apuração</td><td class="n">${ch(r.pa.mes)}/${r.pa.ano}${r.regime?' · regime de '+esc(r.regime.toLowerCase()):''}</td></tr>
+   <tr><td>Município</td><td>${esc(r.local||'não informado')}</td></tr>
+   <tr><td>Receita do período (RPA)</td><td class="n">${brl2(r.rpa.tot)}${r.rpa.ext?' (exportação '+brl2(r.rpa.ext)+')':''}</td></tr>
+   <tr><td>RBT12</td><td class="n">${brl2(r.rbt12)}</td></tr>
+   <tr><td>Receita mensal de 2025</td><td class="n">${completo?'12 meses, total '+brl2(sum(m25)):'incompleta ('+m25.filter(v=>v!==undefined).length+' de 12 meses)'}</td></tr>
+   <tr><td>Folha dos 12 meses (fator r)</td><td class="n">${r.folha.length?brl2(sum(r.folha.map(f=>f.v))):'nenhuma informada'} · fator r: ${esc(r.frTxt||'não informado')}</td></tr>
+   <tr><td>Impedido de recolher ICMS/ISS no DAS</td><td>${esc(r.impedido||'não informado')}</td></tr>
+  </tbody></table></div>
+  <h3>Atividades</h3><div class="scroll"><table><thead><tr><th>Atividade no extrato</th><th>Tipo no planejador</th><th>Receita do período</th><th>ICMS-ST</th><th>Monofásico</th></tr></thead><tbody>`;
+  r.blocos.forEach((b,i)=>{
+    h+=`<tr><td style="white-space:normal;text-align:left;max-width:340px">${esc(b.desc.slice(0,110))}${b.desc.length>110?'…':''}${b.exp?' <span class="tag warn">exportação</span>':''}</td>
+    <td><select data-pgt="${i}" style="min-width:210px">${tipos.map(([k,t])=>`<option value="${k}" ${(b.tipo||'comercio')===k?'selected':''}>${esc(t.rot)}</option>`).join('')}</select></td>
+    <td class="n">${brl2(b.rev)}</td><td class="n">${brl2(b.st)}</td><td class="n">${brl2(b.mono)}</td></tr>`;
+  });
+  h+=`</tbody></table></div><p style="margin-top:12px">${conf}</p>`;
+  if(r.optante==='Não')h+=`<div class="banner bad">O extrato diz que a empresa não é optante do Simples.</div>`;
+  if(r.impedido==='Sim')h+=`<div class="banner warn">A empresa está impedida de recolher ICMS/ISS no DAS (sublimite). O programa trata o ICMS/ISS fora do DAS só pela RBT12; confira.</div>`;
+  if(!completo)h+=`<div class="banner warn">Faltam meses de 2025 no extrato. O histórico será preenchido só com a RBT12 e o fator r pode ficar impreciso.</div>`;
+  (r.avisos||[]).forEach(a=>h+=`<div class="banner warn">${esc(a)}</div>`);
+  h+=`<p class="small">Ao aplicar, o histórico de 2025 e as atividades de 2026 e 2027 são preenchidos. A receita anual de cada atividade começa igual à RBT12 distribuída conforme o período lido: é só um ponto de partida, ajuste para a sua projeção. Compras, créditos, despesas, pessoal, ICMS/ISS por atividade e obrigações acessórias não vêm do extrato e ficam em zero. Os dados já digitados são substituídos.</p>
+  <div class="row"><button class="btn" id="pgAplicar" type="button">Aplicar aos dados</button><button class="btn ghost" id="pgDescartar" type="button">Descartar</button></div></div>`;
+  o.innerHTML=h;
+  o.querySelectorAll('[data-pgt]').forEach(s=>s.onchange=()=>{r.blocos[+s.dataset.pgt].tipo=s.value;pgRender()});
+  $('#pgDescartar').onclick=()=>{pgState=null;pgRender()};
+  $('#pgAplicar').onclick=()=>aplicarPGDAS(r,completo,m25);
+}
+function aplicarPGDAS(r,completo,m25){
+  const cons=consolidarPGDAS(r); if(!cons.length)return;
+  const N=vazio();
+  N.histRec=completo?Math.round(sum(m25)*100)/100:r.rbt12;
+  N.histRecMensal=completo?m25.map(v=>v.toFixed(2).replace('.',',')).join('; '):'';
+  N.histFolha=r.folha.length?Math.round(sum(r.folha.map(f=>f.v))*100)/100:0;
+  for(const a of [2026,2027]){
+    N.anos[a].ativ=cons.map(c=>({nome:TIPOS[c.tipo].rot,tipo:c.tipo,anual:Math.round(r.rbt12*c.share*100)/100,mensal:'',
+      aliqICMS:0,aliqISS:0,pctST:Math.round(c.pctST*100)/100,pctMono:Math.round(c.pctMono*100)/100,pctExp:Math.round(c.pctExp*100)/100,pctB2B:0,red:0}));
+  }
+  S=N; pgState=null;
+  ui.pgMsg='Extrato aplicado. Agora preencha alíquotas de ICMS e ISS por atividade, pessoal, compras, créditos, despesas e custos acessórios, e clique em Calcular.';
+  renderDados(); calcular(); setTab('dados'); window.scrollTo(0,0);
+}
+function ligaPGDAS(){
+  const f=$('#pgFile'); if(!f)return;
+  const proc=txt=>{pgState=lerPGDAS(txt);pgRender()};
+  f.onchange=async()=>{
+    const file=f.files[0]; if(!file)return;
+    const o=$('#pgOut'); o.innerHTML='<p class="small">Lendo o arquivo…</p>';
+    try{
+      if(/\.pdf$/i.test(file.name)||file.type==='application/pdf')proc(await pdfTexto(file));
+      else proc(await file.text());
+    }catch(e){pgState={erro:'Não consegui ler o arquivo ('+(e&&e.message?e.message:'erro')+'). Abra o PDF, copie todo o texto (Ctrl+A, Ctrl+C) e cole na caixa abaixo.'};pgRender()}
+  };
+  $('#pgLer').onclick=()=>{const t=$('#pgTxt').value.trim();if(!t){pgState={erro:'Cole primeiro o texto do extrato.'};pgRender();return}proc(t)};
+  pgRender();
+}
+
 /* ---------- Formulário ---------- */
 function fld(path,label,val,type,extra){
   type=type||'number';
@@ -657,6 +855,7 @@ function fld(path,label,val,type,extra){
 }
 function renderDados(){
   let h=`<h2>Dados da empresa</h2><p class="sub">Informe valores anuais em reais; percentuais em pontos (18 = 18%). Quando houver sazonalidade, cole 12 valores mensais no campo opcional da atividade. Nada é preenchido por suposição: o que ficar em branco vale zero e gera alerta.</p>`;
+  h+=cardImport();
   h+=`<div class="card"><h3 style="margin-top:0">Parâmetros gerais</h3><div class="grid">`+
     fld('socios','Número de sócios',S.socios)+fld('pctDist','% do lucro distribuído',S.pctDist)+
     `<div><label for="f-contabil">Escrituração contábil completa (dividendos sem limite)</label><select id="f-contabil" data-p="contabil" data-b="1"><option value="1" ${S.contabil?'selected':''}>Sim</option><option value="0" ${!S.contabil?'selected':''}>Não</option></select></div>`+
@@ -699,6 +898,7 @@ function renderDados(){
   $('#p-dados').innerHTML=h;
   $('#btnCalc').onclick=()=>{lerForm();calcular();setTab('res')};
   $('#btnEx').onclick=()=>{S=exemplo();renderDados();calcular()};
+  ligaPGDAS();
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{lerForm();S.anos[b.dataset.add].ativ.push({nome:'Nova atividade',tipo:'comercio',anual:0,mensal:'',aliqICMS:0,aliqISS:0,pctST:0,pctMono:0,pctExp:0,pctB2B:0,red:0});S.example=false;renderDados()});
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{lerForm();const [a,i]=b.dataset.del.split(':');if(S.anos[a].ativ.length>1){S.anos[a].ativ.splice(+i,1);renderDados()}});
 }

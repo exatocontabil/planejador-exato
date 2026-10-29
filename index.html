@@ -160,7 +160,7 @@ details.mini>div{padding:10px 0 0}
 @media print{
   :root:root{--bg:#fff;--surface:#fff;--ink:#000;--muted:#444;--line:#ccc;--track:#eee;--soft:#fdecec;--goodbg:#eaf6ef;--warnbg:#fff6e3;--badbg:#fdeceb;--good:#127a45;--warn:#8a5300;--bad:#b3261e;--wm-filter:none;--shadow:none;--c1:#2a62c9;--c2:#0b8a78;--c3:#b56d00;--c4:#8e3fb8;--c5:#5b7c2b;--c6:#0e7490;--accent:#d10f14;color-scheme:light}
   body{background:#fff;color:#000;padding:0;font-size:12px}
-  header.hero,nav.tabs,footer.rod,.no-print,#exBanner{display:none!important}
+  header.hero,nav.tabs,footer.rod,.no-print,#exBanner,#planbar,.modal{display:none!important}
   section.panel{display:none!important}
   #p-rel{display:block!important}
   .wrap{max-width:none;padding:0}
@@ -325,6 +325,24 @@ svg.chart .lab2{font:700 10px var(--sans);fill:var(--ink)}
 .rcard.wide{grid-column:1/-1}
 .rstack{display:grid;gap:14px;align-content:start;min-width:0}
 @media (max-width:900px){.rgrid{grid-template-columns:1fr}}
+
+/* ---- planejamentos ---- */
+.planbar{margin:-8px 0 18px}
+.pb-in{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px}
+.pb-t{display:flex;flex-direction:column;min-width:0;margin-right:4px}.pb-t b{font-size:14px;overflow-wrap:anywhere}
+.pb-in .sp{flex:1}
+.plans{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.plan{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px;min-width:0}
+.plan.atual{border-color:var(--accent)}
+.plan .ptop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.plan .ptop b{font-size:15px;overflow-wrap:anywhere}
+.pchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.pc{font:700 11.5px var(--sans);padding:4px 10px;border-radius:99px;background:var(--bg);color:var(--muted)}
+.pc.g{background:var(--goodbg);color:var(--good)}.pc.w{background:var(--warnbg);color:var(--warn)}
+.btn.sm input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;padding:0;border:0}
+input[type=search]{width:100%}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:grid;place-items:center;z-index:50;padding:18px}
+.modal[hidden]{display:none}
+.mbox{background:var(--surface);color:var(--ink);border-radius:18px;padding:22px;width:min(440px,100%);box-shadow:0 20px 60px rgba(0,0,0,.4)}
 @media (max-width:560px){.arow{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi .v{font-size:16px}.kpi{padding:12px}}
 @media (max-width:560px){.bar{grid-template-columns:1fr auto}.bar .t{grid-column:1/-1;order:3}.card{padding:18px;border-radius:16px}.regime{font-size:22px}.bignum{font-size:34px}}
 </style>
@@ -349,8 +367,10 @@ svg.chart .lab2{font:700 10px var(--sans);fill:var(--ink)}
   <button role="tab" data-t="eq" aria-selected="false">Ponto de equilíbrio</button>
   <button role="tab" data-t="memo" aria-selected="false">Memória de cálculo</button>
   <button role="tab" data-t="risk" aria-selected="false">Riscos e base legal</button>
+  <button role="tab" data-t="plan" aria-selected="false">Planejamentos</button>
 </nav>
 
+<div id="planbar" class="planbar"></div>
 <div id="exBanner" class="banner warn" hidden><strong>Dados de exemplo fictícios.</strong> Os números abaixo ilustram o funcionamento. Abra “Dados da empresa”, informe os valores reais e clique em Calcular.</div>
 
 <section class="panel on" id="p-res"></section>
@@ -358,7 +378,9 @@ svg.chart .lab2{font:700 10px var(--sans);fill:var(--ink)}
 <section class="panel" id="p-eq"></section>
 <section class="panel" id="p-memo"></section>
 <section class="panel" id="p-risk"></section>
+<section class="panel" id="p-plan"></section>
 <section class="panel" id="p-dados"></section>
+<div id="modal" class="modal" hidden></div>
 <footer class="rod"><span>Exato Soluções Contábeis · Planejador tributário</span><span>Apoio ao planejamento: confira as normas e revise com o contador responsável antes de decidir.</span></footer>
 </div>
 
@@ -677,6 +699,8 @@ function calcular(){
   try{localStorage.setItem('planej_v1',JSON.stringify(S))}catch(e){}
   $('#exBanner').hidden=!S.example;
   renderRes();renderRel();renderEq();renderMemo();renderRisk();
+  if(PL.id&&!ui.semAuto)salvarPlano(PL.nome);
+  renderPlanbar();renderPlan();
 }
 
 /* ---------- Conclusão ---------- */
@@ -1249,14 +1273,15 @@ const SLOTS=[
 const ESPERADO={saida:['saida','prestado'],entrada:['entrada'],tomados:['tomado'],cte:['frete']};
 function slotDocs(id){return xmlState&&xmlState.slots?xmlState.slots[id].docs:[]}
 function slotStatus(id){
-  const dd=slotDocs(id); if(!dd.length)return null;
+  const dd=slotDocs(id);
+  if(!dd.length){const n=!xmlState&&ui.slotSaved?ui.slotSaved[id]:0;return n?n+' documento(s) · restaurado do planejamento salvo':null}
   const ds=dd.map(d=>d.dh).filter(Boolean).sort();
   const f=s=>s?s.slice(5,7)+'/'+s.slice(0,4):'';
   return dd.length+' documento(s)'+(ds.length?' · '+f(ds[0])+(f(ds[0])!==f(ds[ds.length-1])?' a '+f(ds[ds.length-1]):''):'');
 }
 function docsContagem(){
-  const pg=pgState&&!pgState.erro;
-  return {pgdas:!!pg,saida:slotDocs('saida').length,entrada:slotDocs('entrada').length,tomados:slotDocs('tomados').length,cte:slotDocs('cte').length};
+  const pg=pgState&&!pgState.erro,sv=ui.slotSaved||{},n=id=>xmlState&&xmlState.slots?slotDocs(id).length:(sv[id]||0);
+  return {pgdas:!!pg,saida:n('saida'),entrada:n('entrada'),tomados:n('tomados'),cte:n('cte')};
 }
 function linhaChk(id,titulo,desc,status,extra,inputHtml){
   const ok=!!status;
@@ -1444,6 +1469,7 @@ function ligaDocs(){
   document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{
     const id=b.dataset.rm; if(id==='pgdas'){pgState=null;ui.pgMeses=null;if(ui.docs)ui.docs.pg=null}
     else if(xmlState&&xmlState.slots){xmlState.slots[id].docs=[]; if(!SLOTS.some(s=>xmlState.slots[s.id].docs.length)){xmlState=null;if(ui.docs)ui.docs.xml=null}}
+    else if(ui.slotSaved){ui.slotSaved[id]=0;if(!SLOTS.some(s=>ui.slotSaved[s.id])&&ui.docs)ui.docs.xml=null}
     refreshImport();
   });
   const ap=$('#docsAplicar'); if(ap)ap.onclick=aplicarTudo;
@@ -1646,6 +1672,120 @@ function renderRel(){
   const p=$('#relImprimir'); if(p)p.onclick=()=>{window.print()};
 }
 
+/* ---------- Planejamentos salvos ---------- */
+const LIBK='planej_lib_v1',ATUALK='planej_atual_v1';
+let PL={id:null,nome:'',salvoEm:null};
+function libLer(){try{const a=JSON.parse(localStorage.getItem(LIBK)||'[]');return Array.isArray(a)?a:[]}catch(e){return []}}
+function libGravar(a){try{localStorage.setItem(LIBK,JSON.stringify(a));ui.libErro=null;return true}catch(e){ui.libErro='Não foi possível gravar neste navegador (armazenamento cheio ou bloqueado). Exporte o planejamento em arquivo para não perdê-lo.';return false}}
+function uid(){return 'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+const fmtDH=t=>t?new Date(t).toLocaleDateString('pt-BR')+' '+new Date(t).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—';
+function snapshotDocs(){
+  const pg=pgState&&!pgState.erro?pgState:null,xm=ui.docs&&ui.docs.xml;
+  return {pg,xml:xm?{ano:xm.ano,c:xm.c,ign:xm.ign,ndocs:xm.ndocs,cnpj:xm.cnpj,Y:Object.assign({},xm.Y,{meses:[...xm.Y.meses]})}:null,counts:docsContagem()};
+}
+function restaurarDocs(sn){
+  xmlState=null;ui.docs={};ui.pgMeses=null;ui.slotSaved=null;pgState=null;
+  if(!sn)return;
+  if(sn.pg){pgState=sn.pg;ui.pgMeses=sn.pg.meses||null;ui.docs.pg=sn.pg}
+  if(sn.xml&&sn.xml.Y)ui.docs.xml=Object.assign({},sn.xml,{Y:Object.assign({},sn.xml.Y,{meses:new Set(sn.xml.Y.meses||[])})});
+  ui.slotSaved=sn.counts||null;
+}
+function resumoPlano(){
+  try{const r27=R[2027].base,rk=ranking(r27),w=rk[0],{crit}=faltasDados(N);
+    return {regime:w.nome,vantagem:rk[1]?w.liq-rk[1].liq:0,receita:r27.A.rec,liq:w.liq,crit:crit.length,docs:Object.values(docsContagem()).filter(Boolean).length,pa:pgState&&!pgState.erro?String(pgState.pa.mes).padStart(2,'0')+'/'+pgState.pa.ano:null}}catch(e){return null}
+}
+function nomePadrao(){return pgState&&!pgState.erro&&pgState.nome?pgState.nome:'Planejamento sem nome'}
+function salvarPlano(nome,comoNovo){
+  const lib=libLer(),agora=Date.now();
+  let it=!comoNovo&&PL.id?lib.find(x=>x.id===PL.id):null;
+  if(!it){it={id:uid(),criado:agora};lib.unshift(it)}
+  it.nome=nome||PL.nome||nomePadrao(); it.atualizado=agora;
+  it.cnpj=(pgState&&!pgState.erro&&pgState.cnpjb)||(ui.docs&&ui.docs.xml&&ui.docs.xml.cnpj)||'';
+  it.resumo=resumoPlano(); it.S=JSON.parse(JSON.stringify(S)); it.docs=JSON.parse(JSON.stringify(snapshotDocs(),(k,v)=>v instanceof Set?[...v]:v));
+  if(!libGravar(lib))return false;
+  PL={id:it.id,nome:it.nome,salvoEm:agora};
+  try{localStorage.setItem(ATUALK,it.id)}catch(e){}
+  return true;
+}
+function abrirPlano(id){
+  const it=libLer().find(x=>x.id===id); if(!it)return;
+  S=JSON.parse(JSON.stringify(it.S)); S.example=!!it.S.example; restaurarDocs(it.docs);
+  PL={id:it.id,nome:it.nome,salvoEm:it.atualizado}; try{localStorage.setItem(ATUALK,it.id)}catch(e){}
+  ui.msg='';ui.semAuto=true; renderDados(); calcular(); ui.semAuto=false; setTab('res'); window.scrollTo(0,0);
+}
+function novoPlano(){
+  S=exemplo(); pgState=null; xmlState=null; ui.docs={}; ui.pgMeses=null; ui.slotSaved=null; ui.msg='';
+  PL={id:null,nome:'',salvoEm:null}; try{localStorage.removeItem(ATUALK)}catch(e){}
+  ui.semAuto=true; renderDados(); calcular(); ui.semAuto=false; setTab('dados'); window.scrollTo(0,0);
+}
+function iniciarPlano(){
+  try{const id=localStorage.getItem(ATUALK),it=id?libLer().find(x=>x.id===id):null;
+    if(it&&it.S&&it.S.anos){S=JSON.parse(JSON.stringify(it.S));restaurarDocs(it.docs);PL={id:it.id,nome:it.nome,salvoEm:it.atualizado}}}catch(e){}
+}
+function pedirNome(titulo,valor,ok){
+  const m=$('#modal'); m.hidden=false;
+  m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-label="${esc(titulo)}"><h3 style="margin-top:0">${esc(titulo)}</h3><label for="mNome">Nome do planejamento</label><input id="mNome" type="text" value="${esc(valor)}" maxlength="120"><div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn ghost" id="mCancela" type="button">Cancelar</button><button class="btn" id="mOk" type="button">Salvar</button></div></div>`;
+  const i=$('#mNome'); i.focus(); i.select();
+  const fecha=()=>{m.hidden=true;m.innerHTML=''};
+  $('#mCancela').onclick=fecha; m.onclick=e=>{if(e.target===m)fecha()};
+  const go=()=>{const v=i.value.trim();if(!v)return;fecha();ok(v)};
+  $('#mOk').onclick=go; i.onkeydown=e=>{if(e.key==='Enter')go();if(e.key==='Escape')fecha()};
+}
+function acaoSalvar(comoNovo){
+  if(ui.tab==='dados'){lerForm();ui.semAuto=true;calcular();ui.semAuto=false}
+  const f=nome=>{if(salvarPlano(nome,comoNovo)){ui.planMsg='Planejamento “'+nome+'” salvo neste navegador.'}renderPlanbar();renderPlan()};
+  if(PL.id&&!comoNovo){f(PL.nome);return}
+  pedirNome(comoNovo?'Salvar uma cópia como…':'Salvar planejamento',PL.nome||nomePadrao(),f);
+}
+function renderPlanbar(){
+  const el=$('#planbar'); if(!el)return;
+  el.innerHTML=`<div class="pb-in"><div class="pb-t"><span class="k">Planejamento atual</span><b>${esc(PL.nome||'Sem nome')}</b></div><span class="tag ${PL.id?'good':'warn'}" style="margin:0">${PL.id?'Salvo '+fmtDH(PL.salvoEm).split(' ')[1]:'Não salvo'}</span><span class="sp"></span><button class="btn ghost sm" id="pbSalvar" type="button">${PL.id?'Salvar agora':'Salvar planejamento'}</button>${PL.id?'<button class="btn ghost sm" id="pbComo" type="button">Salvar como…</button>':''}<button class="btn ghost sm" id="pbLista" type="button">Meus planejamentos</button></div>`;
+  $('#pbSalvar').onclick=()=>acaoSalvar(false); const c=$('#pbComo'); if(c)c.onclick=()=>acaoSalvar(true);
+  $('#pbLista').onclick=()=>{setTab('plan');window.scrollTo(0,0)};
+}
+function baixarJson(obj,nome){
+  const u=URL.createObjectURL(new Blob([JSON.stringify(obj)],{type:'application/json'})),a=document.createElement('a');
+  a.href=u;a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+function importarPlanos(txt){
+  const d=JSON.parse(txt),L=d.planos||(d.plano?[d.plano]:[]);
+  if(d.formato!=='planejador-exato'||!L.length)throw new Error('O arquivo não é um planejamento exportado por este programa.');
+  const ok=L.filter(it=>it&&it.S&&it.S.anos&&[2026,2027].every(a=>it.S.anos[a]&&Array.isArray(it.S.anos[a].ativ)&&it.S.anos[a].ativ.length));
+  if(!ok.length)throw new Error('Nenhum planejamento válido encontrado no arquivo.');
+  const lib=libLer(),agora=Date.now();
+  ok.forEach(it=>{it.id=uid();it.nome=String(it.nome||'Planejamento importado').slice(0,120);it.atualizado=it.atualizado||agora;it.criado=it.criado||agora;lib.unshift(it)});
+  if(!libGravar(lib))throw new Error(ui.libErro);
+  return ok.length;
+}
+function renderPlan(){
+  const o=$('#p-plan'); if(!o)return;
+  const emb=window.self!==window.top,lib=libLer(),q=(ui.planQ||'').toLowerCase();
+  const vis=lib.filter(x=>!q||(x.nome+' '+(x.cnpj||'')).toLowerCase().includes(q));
+  let h=`<h2>Planejamentos salvos</h2><p class="sub" style="margin-bottom:14px">Ficam guardados só neste navegador, neste aparelho. Para levar a outro computador ou fazer backup, exporte em arquivo${emb?' (a exportação funciona pelo link público)':''}.</p>`;
+  if(ui.libErro)h+=`<div class="banner bad">${esc(ui.libErro)}</div>`;
+  if(ui.planMsg){h+=`<div class="banner ok">${esc(ui.planMsg)}</div>`;ui.planMsg=null}
+  h+=`<div class="row" style="margin-bottom:16px"><input id="planQ" type="search" placeholder="Buscar por nome ou CNPJ" value="${esc(ui.planQ||'')}" style="max-width:280px"><span class="sp" style="flex:1"></span><label class="btn ghost sm" style="margin:0">Importar arquivo<input id="planImp" type="file" accept=".json,application/json"></label>${emb||!lib.length?'':'<button class="btn ghost sm" id="planExpTodos" type="button">Exportar todos</button>'}<button class="btn sm" id="planNovo" type="button">Novo planejamento</button></div>`;
+  if(!lib.length)h+=`<div class="card" style="text-align:center;padding:36px 22px"><h3 style="margin-top:0">Nenhum planejamento salvo ainda</h3><p class="sub" style="margin:0 auto 14px">Monte uma análise e clique em “Salvar planejamento” na barra acima. Ela volta aqui para você abrir, duplicar ou exportar.</p></div>`;
+  else if(!vis.length)h+=`<p>Nenhum planejamento encontrado para a busca.</p>`;
+  else h+=`<div class="plans">`+vis.map(it=>{const r=it.resumo||{},atual=it.id===PL.id;
+    return `<div class="plan${atual?' atual':''}"><div class="ptop"><b>${esc(it.nome)}</b>${atual?'<span class="tag good" style="margin:0">Aberto</span>':''}</div><div class="small">${it.cnpj?'CNPJ básico '+esc(it.cnpj)+' · ':''}atualizado em ${fmtDH(it.atualizado)}</div>
+    <div class="pchips">${r.regime?`<span class="pc">2027: ${esc(REGC[r.regime]||r.regime)}</span><span class="pc">${brl(r.vantagem||0)} de vantagem</span><span class="pc ${r.crit?'w':'g'}">${r.crit?r.crit+' pendência(s)':'Dados completos'}</span><span class="pc">${r.docs||0} de 5 docs</span>`:'<span class="pc">Sem resumo</span>'}${it.S&&it.S.example?'<span class="pc w">Dados de exemplo</span>':''}</div>
+    <div class="row" style="gap:8px;margin-top:10px"><button class="btn sm" data-ab="${it.id}" type="button">Abrir</button><button class="btn ghost sm" data-dup="${it.id}" type="button">Duplicar</button>${emb?'':`<button class="btn ghost sm" data-exp="${it.id}" type="button">Exportar</button>`}<button class="lk" data-del="${it.id}" type="button" style="margin-left:auto">${ui.delId===it.id?'Confirmar exclusão':'Excluir'}</button></div></div>`}).join('')+`</div>`;
+  o.innerHTML=h;
+  $('#planNovo').onclick=novoPlano;
+  const qq=$('#planQ'); qq.oninput=()=>{ui.planQ=qq.value;const p=qq.selectionStart;renderPlan();const n=$('#planQ');n.focus();n.setSelectionRange(p,p)};
+  $('#planImp').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const n=importarPlanos(await f.text());ui.planMsg=n+' planejamento(s) importado(s).'}catch(x){ui.libErro=x&&x.message?x.message:'Arquivo inválido.'}renderPlan()};
+  const eT=$('#planExpTodos'); if(eT)eT.onclick=()=>baixarJson({formato:'planejador-exato',versao:1,exportadoEm:new Date().toISOString(),planos:libLer()},'planejamentos-exato.json');
+  o.querySelectorAll('[data-ab]').forEach(b=>b.onclick=()=>abrirPlano(b.dataset.ab));
+  o.querySelectorAll('[data-dup]').forEach(b=>b.onclick=()=>{const l=libLer(),it=l.find(x=>x.id===b.dataset.dup);if(!it)return;const c=JSON.parse(JSON.stringify(it));c.id=uid();c.nome=it.nome+' (cópia)';c.criado=c.atualizado=Date.now();l.unshift(c);if(libGravar(l))ui.planMsg='Cópia criada.';renderPlan()});
+  o.querySelectorAll('[data-exp]').forEach(b=>b.onclick=()=>{const it=libLer().find(x=>x.id===b.dataset.exp);if(it)baixarJson({formato:'planejador-exato',versao:1,exportadoEm:new Date().toISOString(),plano:it},'planejamento-'+it.nome.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)+'.json')});
+  o.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    if(ui.delId!==b.dataset.del){ui.delId=b.dataset.del;renderPlan();return}
+    ui.delId=null;const l=libLer().filter(x=>x.id!==b.dataset.del);libGravar(l);
+    if(PL.id===b.dataset.del){PL={id:null,nome:'',salvoEm:null};try{localStorage.removeItem(ATUALK)}catch(e){}renderPlanbar()}
+    ui.planMsg='Planejamento excluído.';renderPlan()});
+}
+
 /* ---------- Formulário ---------- */
 function fld(path,label,val,type,extra){
   type=type||'number';
@@ -1720,7 +1860,7 @@ function setTab(t){
   document.querySelectorAll('section.panel').forEach(s=>s.classList.toggle('on',s.id==='p-'+t));
 }
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{if(b.dataset.t!=='dados'&&ui.tab==='dados'){lerForm();calcular()}setTab(b.dataset.t)});
-renderDados();calcular();
+iniciarPlano();renderDados();calcular();
 </script>
 
 </body>

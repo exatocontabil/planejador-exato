@@ -528,10 +528,10 @@ function indiretos(Y,A,P,ano,cbs,regime){
     P.ttd.forEach(t=>{const pct=Math.min(t.pct,1-shareT);if(pct<=0||t.carga==null)return;shareT+=pct;
       const bt=A.baseIcms*pct,est=t.estorna?Y.icmsCred*pct:0;
       const cls=t.mix?[4,7,12].filter(c=>t.mix[c]>0).map(c=>[c,t.mix[c]]):[[Math.round(t.aliqInter*100),1]];
-      let tax=0,ben=0,arM=0;
-      cls.forEach(([c,sh])=>{const btc=bt*sh,ar=t.tipo==='p478'?c/100:r0,cg=t.tipo==='p478'&&t.cargaOv==null&&TAB478[c]!=null?TAB478[c]/100:t.carga,tx=btc*cg;tax+=tx;ben+=Math.max(0,btc*ar-tx);arM+=ar*sh});
+      let tax=0,ben=0,arM=0,remT=0;const cl2=[];
+      cls.forEach(([c,sh])=>{const btc=bt*sh,ar=t.tipo==='p478'?c/100:r0,cg=t.tipo==='p478'&&t.cargaOv==null&&TAB478[c]!=null?TAB478[c]/100:t.carga,tx=btc*cg,bn=Math.max(0,btc*ar-tx);tax+=tx;ben+=bn;arM+=ar*sh;remT+=Y.icmsEst&&t.tipo==='p478'?btc*ar:btc*r0;cl2.push({c,base:btc,ar,carga:cg,tax:tx,ben:bn})});
       const fundo=t.fundos*ben;
-      ttdRem+=bt*r0;ttdTax+=tax;ttdFundo+=fundo;ttdBen+=ben;ttdEst+=est;ttdIt.push({cod:t.cod,bt,carga:bt>0?tax/bt:t.carga,ar:arM,tax,ben,fundo,est,pct,mix:t.mix||null})});
+      ttdRem+=remT;ttdTax+=tax;ttdFundo+=fundo;ttdBen+=ben;ttdEst+=est;ttdIt.push({cod:t.cod,bt,carga:bt>0?tax/bt:t.carga,ar:arM,tax,ben,fundo,est,pct,mix:t.mix||null,cls:cl2})});
   }
   const temTtd=ttdIt.length>0;
   const icmsBr=temTtd?Math.max(0,A.icmsDeb-ttdRem+ttdTax+ttdFundo-(Y.icmsCred-ttdEst)):icmsSem;
@@ -781,24 +781,25 @@ function norm(S){
     const au=(t.modo!=='manual'&&t.auto&&t.auto.pct!=null)?t.auto:null,ov=(t.cargaEf===''||t.cargaEf==null)?null:(+t.cargaEf)/100;
     let mix=null;if(au&&au.cl){const tot=(+au.cl[4]||0)+(+au.cl[7]||0)+(+au.cl[12]||0);if(tot>0)mix={4:(+au.cl[4]||0)/tot,7:(+au.cl[7]||0)/tot,12:(+au.cl[12]||0)/tot}}
     if(tipo==='p478'&&mix&&c==null)c=.02;
-    return {cod:String(t.cod||'?'),nome:t.nome||'',tipo,pct:au?Math.min(1,Math.max(0,+au.pct||0)):Math.min(1,Math.max(0,(+t.pctReceita||0)/100)),carga:c,cargaOv:ov,mix:tipo==='p478'?mix:null,aliqInter:ai,fundos:(+t.fundos||0)/100,estorna:!!t.estorna,aguardaAuto:!!(t.autoKind&&t.modo!=='manual'&&!t.auto)}});
+    return {cod:String(t.cod||'?'),nome:t.nome||'',tipo,pct:au?Math.min(1,Math.max(0,+au.pct||0)):Math.min(1,Math.max(0,(+t.pctReceita||0)/100)),carga:c,cargaOv:ov,mix:tipo==='p478'?mix:null,aliqInter:ai,fundos:(+t.fundos||0)/100,estorna:!!t.estorna,aguardaAuto:!!(t.autoKind&&t.modo!=='manual'&&!t.auto),stale:!!(au&&au.stale)}});
   N.P.ttdExcl=!!T.exclLucro;
   if(T.possui==='')pend.push({t:'Informar se a empresa possui TTD de Santa Catarina (Passo 1)',crit:false});
   else if(T.possui==='nao_sei')pend.push({t:'Verificar se a empresa possui TTD (consulta SEF-SC)',crit:false});
   else if(T.possui==='sim'){if(!tiAll.length)pend.push({t:'Informar qual TTD a empresa possui',crit:true});
-    N.P.ttd.forEach(t=>{if(t.aguardaAuto)pend.push({t:'TTD '+t.cod+': anexe as notas de saída para o cálculo automático (ou informe manualmente)',crit:true});else if(!(t.pct>0))pend.push({t:'TTD '+t.cod+': não há vendas elegíveis nas notas; confira ou informe o % da receita à mão',crit:true});else if(t.carga==null)pend.push({t:'TTD '+t.cod+': informar a carga efetiva de ICMS nas operações beneficiadas',crit:true})})}
+    N.P.ttd.forEach(t=>{if(t.stale)pend.push({t:'TTD '+t.cod+': o planejamento tem leitura antiga das notas; anexe as notas de saída de novo',crit:true});else if(t.aguardaAuto)pend.push({t:'TTD '+t.cod+': anexe as notas de saída para o cálculo automático (ou informe manualmente)',crit:true});else if(!(t.pct>0))pend.push({t:'TTD '+t.cod+': não há vendas elegíveis nas notas; confira ou informe o % da receita à mão',crit:true});else if(t.carga==null)pend.push({t:'TTD '+t.cod+': informar a carga efetiva de ICMS nas operações beneficiadas',crit:true})})}
   N.P.ttdPend=pend;
   N.hist.rec=meses12(S.histRecMensal,+S.histRec||0);
   N.hist.fol=Array(12).fill((+S.histFolha||0)/12);
   for(const a of [2026,2027]){
     const y=S.anos[a];
     const Y={ativ:y.ativ.map(x=>({nome:x.nome||'Atividade',tipo:x.tipo,m:meses12(x.mensal,+x.anual||0),
-        aliqICMS:(+x.aliqICMS||0)/100,aliqISS:(+x.aliqISS||0)/100,pctST:(+x.pctST||0)/100,pctMono:(+x.pctMono||0)/100,pctExp:(+x.pctExp||0)/100,pctB2B:(+x.pctB2B||0)/100,red:(+x.red||0)/100})),
+        aliqICMS:(+x.aliqICMS||0)/100,aliqISS:(+x.aliqISS||0)/100,pctST:(+x.pctST||0)/100,pctMono:(+x.pctMono||0)/100,pctExp:(+x.pctExp||0)/100,pctB2B:(+x.pctB2B||0)/100,red:(+x.red||0)/100,aliqEst:!!x.aliqEst})),
       sal:+y.salarios||0,prol:+y.prolabore||0,rat:(+y.rat||0)/100,terc:(+y.terc||0)/100,
       compras:+y.compras||0,icmsCred:+y.icmsCred||0,baseCredPC:+y.baseCredPC||0,baseCredCBS:+y.baseCredCBS||0,despesas:+y.despesas||0,
       adicoes:+y.adicoes||0,prejuizo:+y.prejuizo||0,ipi:+y.ipi||0,
       acess:{simples:+y.acess.simples||0,hibrido:+y.acess.hibrido||0,presumido:+y.acess.presumido||0,real:+y.acess.real||0}};
     Y.folhaFR=Array(12).fill((Y.sal+Y.prol+.08*Y.sal)/12);
+    Y.icmsEst=Y.ativ.filter(x=>TIPOS[x.tipo].merc).length>0&&Y.ativ.filter(x=>TIPOS[x.tipo].merc).every(x=>x.aliqEst);
     N.anos[a]=Y;
   }
   return N;
@@ -1035,6 +1036,7 @@ function tabelaLinhas(x,rec){
 }
 function extrasRegime(x,rec,ano){
   let h='';
+  if(x.ttd&&x.ttd.itens&&x.ttd.itens.length)x.ttd.itens.forEach(t=>{h+=`<h4 class="sub4">TTD ${esc(t.cod)}: alíquotas aplicadas às vendas beneficiadas</h4><div class="scroll"><table><thead><tr><th>Alíquota interestadual (ICMS normal)</th><th>Vendas beneficiadas</th><th>ICMS sem o TTD</th><th>Carga efetiva do TTD</th><th>ICMS com o TTD</th><th>Benefício</th></tr></thead><tbody>${(t.cls||[]).map(c=>`<tr><td>${pc(c.ar,0)}</td><td class="n">${brl(c.base)}</td><td class="n">${brl(c.base*c.ar)}</td><td class="n">${pc(c.carga,2)}</td><td class="n">${brl(c.tax)}</td><td class="n">${brl(c.ben)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="n">${brl(t.bt)}</td><td class="n">${brl((t.cls||[]).reduce((s,c)=>s+c.base*c.ar,0))}</td><td class="n">${pc(t.carga,2)}</td><td class="n">${brl(t.tax)}</td><td class="n">${brl(t.ben)}</td></tr></tbody></table></div><p class="small">Contrapartida a fundos de ${brl(t.fundo)} (sobre o benefício) já somada ao ICMS${t.est>0?` e estorno de ${brl(t.est)} em créditos de entrada`:''}. O DIFAL do estado de destino não é modelado.</p>`});
   if(x.enq&&x.enq.length)h+=`<h4 class="sub4">Enquadramento no Simples (última competência do ano)</h4><div class="scroll"><table><thead><tr><th>Atividade</th><th>Anexo / faixa</th><th>Alíquota nominal</th><th>Parcela a deduzir</th><th>Alíquota efetiva</th><th>Efetiva média do ano</th></tr></thead><tbody>${x.enq.map(e=>`<tr><td>${esc(e.nome)}</td><td>${e.an} / ${e.faixa}ª</td><td class="n">${pc(e.al,1)}</td><td class="n">${brl(e.pd)}</td><td class="n">${pc(e.erUlt)}</td><td class="n">${pc(e.erMed)}</td></tr>`).join('')}</tbody></table></div><p class="small">Alíquota efetiva = (RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12 (LC 123/2006, art. 18, §1º). A efetiva média é o DAS da atividade dividido pela receita dela.</p>`;
   if(x.pres)h+=`<h4 class="sub4">Base de cálculo presumida</h4><div class="scroll"><table><thead><tr><th>Atividade</th><th>Receita</th><th>Presunção IRPJ</th><th>Base IRPJ</th><th>Presunção CSLL</th><th>Base CSLL</th></tr></thead><tbody>${x.pres.map(e=>`<tr><td>${esc(e.nome)}</td><td class="n">${brl(e.rec)}</td><td class="n">${pc(e.pi,0)}</td><td class="n">${brl(e.bi)}</td><td class="n">${pc(e.pcs,0)}</td><td class="n">${brl(e.bc)}</td></tr>`).join('')}</tbody></table></div><p class="small">No Presumido o imposto incide sobre uma margem presumida da receita, não sobre o lucro real (Lei 9.249/1995, arts. 15 e 20).</p>`;
   if(x.lrDet){const d=x.lrDet;h+=`<h4 class="sub4">Do faturamento ao lucro tributável</h4><div class="scroll"><table><tbody><tr><td>Receita bruta</td><td class="n">${brl(d.rec)}</td></tr><tr><td>(−) Tributos indiretos líquidos (ICMS, ISS, ${ano===2027?'CBS/IBS':'PIS/COFINS'}, IPI)</td><td class="n">${brl(d.indSum)}</td></tr><tr><td>(−) Compras</td><td class="n">${brl(d.compras)}</td></tr><tr><td>(−) Despesas operacionais</td><td class="n">${brl(d.despesas)}</td></tr><tr><td>(−) Pessoal (salários, pró-labore, FGTS)</td><td class="n">${brl(d.pes)}</td></tr><tr><td>(−) Encargos patronais</td><td class="n">${brl(d.encReg)}</td></tr><tr><td>(+) Adições menos exclusões</td><td class="n">${brl(d.adicoes)}</td></tr>${d.ttdExc>0?`<tr><td>(−) Benefício do TTD excluído da base (subvenção para investimento)</td><td class="n">${brl(d.ttdExc)}</td></tr>`:''}<tr class="tot"><td>Lucro antes do IRPJ</td><td class="n">${brl(d.lr)}</td></tr><tr><td>(−) Prejuízo fiscal compensado (limite de 30%)</td><td class="n">${brl(d.comp)}</td></tr><tr class="tot"><td>Base do IRPJ e da CSLL</td><td class="n">${brl(d.base)}</td></tr></tbody></table></div>`}
@@ -1440,7 +1442,7 @@ function agregarXml(st){
   const seen=new Set(),por={},c={dup:0,canc:0,naoAut:0,terceiros:0};
   const mk=()=>({rec:{},recTipo:{comercio:0,industria:0,servico:0},st:0,mono:0,exp:0,eligBase:0,icmsVal:0,devol:{},devCompra:0,
     compras:{},comprasTot:0,icmsCred:0,baseCredPC:0,baseCredCBS:0,fornSimples:0,uso:0,ativo:0,outras:0,nSaida:0,nEntrada:0,meses:new Set(),
-    interCF:0,ecom:{base:0,cl:{4:0,7:0,12:0}},ecomNd:{base:0,cl:{4:0,7:0,12:0}},interAll:{base:0,cl:{4:0,7:0,12:0}},diag:{interna:0,interContrib:0,cfPr:0,cfNd:0,outrasInter:{}},impBase:0,servPrest:0,issPrest:0,baseIssPrest:0,nPrest:0,servTom:0,servTomSimples:0,issTom:0,nTom:0,frete:0,freteIcms:0,freteSimples:0,nFrete:0,servTomMes:{},freteMes:{}});
+    interCF:0,ecom:{base:0,cl:{4:0,7:0,12:0}},ecomNd:{base:0,cl:{4:0,7:0,12:0}},interAll:{base:0,cl:{4:0,7:0,12:0}},estInter:0,estIntraBase:0,ufEmit:'',diag:{interna:0,interContrib:0,cfPr:0,cfNd:0,outrasInter:{}},impBase:0,servPrest:0,issPrest:0,baseIssPrest:0,nPrest:0,servTom:0,servTomSimples:0,issTom:0,nTom:0,frete:0,freteIcms:0,freteSimples:0,nFrete:0,servTomMes:{},freteMes:{}});
   for(const d of st.docs){
     if(seen.has(d.chave)){c.dup++;continue} seen.add(d.chave);
     if(st.cancel.has(d.chave)){c.canc++;continue}
@@ -1461,7 +1463,8 @@ function agregarXml(st){
         if(ex)Y.exp+=base; if(stt)Y.st+=base; if(mo)Y.mono+=base;
         if(k==='receita'&&!ex&&!stt){Y.eligBase+=base;Y.icmsVal+=it.vICMS;
           const di=destInfo(d,it),cl=aliqInterClasse(d.ufEmit,d.ufDest,it.orig);
-          if(di.inter){Y.interAll.base+=base;Y.interAll.cl[cl]=(Y.interAll.cl[cl]||0)+base}
+          if(di.inter){Y.interAll.base+=base;Y.interAll.cl[cl]=(Y.interAll.cl[cl]||0)+base;Y.estInter+=base*cl/100}else Y.estIntraBase+=base;
+          if(!Y.ufEmit&&d.ufEmit)Y.ufEmit=d.ufEmit;
           if(!di.inter)Y.diag.interna+=base;
           else if(!di.nc)Y.diag.interContrib+=base;
           else{Y.interCF+=base;
@@ -1619,7 +1622,7 @@ function xmlRender(){
     kpi('ICMS-ST',rec?pc(Y.st/rec,1):'—','Parcela da receita (substituído)')+
     kpi('Monofásico',rec?pc(Y.mono/rec,1):'—','Parcela da receita (PIS/COFINS)')+
     kpi('Exportação',rec?pc(Y.exp/rec,1):'—','Parcela da receita')+
-    kpi('ICMS nas vendas',Y.icmsVal>0?pc(aliq,1):'Não destacado','Alíquota efetiva',Y.icmsVal>0?'':'warn')+
+    (()=>{const intra=Y.ufEmit==='SC'?0.17:null,ok=Y.icmsVal===0&&Y.eligBase>0&&(Y.estIntraBase<=0.5||intra!=null),est=ok?(Y.estInter+Y.estIntraBase*(intra||0))/Y.eligBase:0;return kpi('ICMS nas vendas',Y.icmsVal>0?pc(aliq,1):(ok?pc(est,1):'Não destacado'),Y.icmsVal>0?'Alíquota efetiva destacada':(ok?'Alíquota efetiva estimada':'Informe à mão'),Y.icmsVal>0||ok?'':'warn')})()+
     `</div><h3>Compras, serviços tomados e fretes</h3><div class="kpis">`+
     kpi('Compras (insumos e revenda)',brl(Y.comprasTot),'Valor da nota')+
     kpi('ICMS creditável',brl(Y.icmsCred+Y.freteIcms),Y.freteIcms?'Inclui '+brl(Y.freteIcms)+' de fretes':'Nas entradas')+
@@ -1638,7 +1641,7 @@ function xmlRender(){
   if(!pgm)h+=`<p class="small" style="margin-top:8px">Anexe também o extrato do PGDAS-D para comparar a receita das notas com a declarada.</p>`;
   const av=[...fora];
   if(ign.nfseIlegivel)av.push(`${ign.nfseIlegivel} NFS-e em layout que não consegui ler foram ignoradas. Envie um exemplo do município para eu incluir o formato.`);
-  if(Y.icmsVal===0&&Y.eligBase>0)av.push('As notas de saída não destacam ICMS, o que é normal para empresa do Simples. A alíquota de ICMS por atividade precisa ser informada à mão.');
+  if(Y.icmsVal===0&&Y.eligBase>0)av.push(Y.ufEmit==='SC'||Y.estIntraBase<=0.5?'As notas de saída não destacam ICMS, o que é normal para empresa do Simples. Estimei a alíquota efetiva pelas alíquotas interestaduais (4%, 7% e 12%, conforme destino e origem do produto) e 17% nas vendas dentro de SC. Confirme por produto.':'As notas de saída não destacam ICMS e há vendas dentro do estado de origem: informe a alíquota interna à mão.');
   if(nm<12)av.push(`Os documentos cobrem ${nm} de 12 meses de ${st.ano}. <label style="display:inline;color:inherit;font-weight:700"><input id="xmlAnual" type="checkbox" ${st.anual?'checked':''}> Projetar o ano pela média dos meses lidos</label> (hipótese: multiplica por ${nm>0?(12/nm).toFixed(2).replace('.',','):'—'}).`);
   av.push('Valores estimados a partir de CFOP, CST e layouts de NFS-e e CT-e: confira por amostragem. A base de CBS/IBS usa o valor do documento e ainda precisa ser conferida com a LC 214.');
   if(Y.ecom&&Y.ecom.base>0&&!(S.ttd&&S.ttd.possui==='sim'&&S.ttd.itens.some(i=>i.cod==='478')))av.push(`Encontramos ${brl(Y.ecom.base)} em vendas pela internet ou telemarketing a consumidor final não contribuinte de outro estado (${pc(Y.eligBase>0?Y.ecom.base/Y.eligBase:0,1)} da receita de mercadorias). Se a empresa estiver, ou puder estar, no regime normal, elas podem ser elegíveis ao TTD 478. <button class="btn ghost sm" id="ttdSug" type="button">Considerar o TTD 478 no cálculo</button>`);
@@ -1669,11 +1672,13 @@ function aplicarTudo(){
   }
   if(Y){
     const f=(st.anual&&nm<12&&nm>0)?12/nm:1;
-    const rec=sum(Object.values(Y.rec)),dev=sum(Object.values(Y.devol)),aliq=Y.eligBase>0?Y.icmsVal/Y.eligBase*100:0,aliqIss=Y.baseIssPrest>0?Y.issPrest/Y.baseIssPrest*100:0;
+    const intra=Y.ufEmit==='SC'?0.17:null,estOk=Y.icmsVal===0&&Y.eligBase>0&&(Y.estIntraBase<=0.5||intra!=null);
+    const aliqEstVal=estOk?(Y.estInter+Y.estIntraBase*(intra||0))/Y.eligBase*100:0;
+    const rec=sum(Object.values(Y.rec)),dev=sum(Object.values(Y.devol)),aliq=Y.eligBase>0?(Y.icmsVal>0?Y.icmsVal/Y.eligBase*100:aliqEstVal):0,aliqIss=Y.baseIssPrest>0?Y.issPrest/Y.baseIssPrest*100:0;
     const tipos=Object.entries(Y.recTipo).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
     if(tipos.length){
       const ativ=tipos.map(([t,v],i)=>{const liq=Math.max(0,v-(i===0?dev:0)),tp=t==='servico'?'serv_fr':t;
-        return {nome:TIPOS[tp].rot,tipo:tp,anual:r2(liq*f),mensal:'',aliqICMS:t==='servico'?0:r2(aliq),aliqISS:t==='servico'?r2(aliqIss):0,
+        return {nome:TIPOS[tp].rot,tipo:tp,anual:r2(liq*f),mensal:'',aliqICMS:t==='servico'?0:r2(aliq),aliqEst:t!=='servico'&&Y.icmsVal===0&&aliq>0,aliqISS:t==='servico'?r2(aliqIss):0,
           pctST:r2(rec?Y.st/rec*100:0),pctMono:r2(rec?Y.mono/rec*100:0),pctExp:r2(rec?Y.exp/rec*100:0),pctB2B:0,red:0}});
       for(const a of [2026,2027])N.anos[a].ativ=JSON.parse(JSON.stringify(ativ));
     }
@@ -2204,7 +2209,7 @@ function renderDados(){
       h+=`<div class="act"><div class="grid">`+fld(p+'nome','Atividade',x.nome,'text')+
         `<div><label for="f-${p}tipo">Tipo</label><select id="f-${p}tipo" data-p="${p}tipo" data-s="1">${Object.entries(TIPOS).map(([k,t])=>`<option value="${k}" ${x.tipo===k?'selected':''}>${t.rot}</option>`).join('')}</select></div>`+
         fld(p+'anual','Receita anual (R$)',x.anual)+
-        (T.merc?fld(p+'aliqICMS','Alíq. efetiva de ICMS nas vendas (%)',x.aliqICMS)+fld(p+'pctST','% da receita com ICMS-ST',x.pctST)+fld(p+'pctMono','% da receita monofásica (PIS/COFINS)',x.pctMono):'')+
+        (T.merc?fld(p+'aliqICMS','Alíq. efetiva de ICMS nas vendas (%)'+(x.aliqEst?' · estimada pelas notas':''),x.aliqICMS)+fld(p+'pctST','% da receita com ICMS-ST',x.pctST)+fld(p+'pctMono','% da receita monofásica (PIS/COFINS)',x.pctMono):'')+
         (!T.merc&&!T.semISS?fld(p+'aliqISS','Alíq. de ISS do município (%)',x.aliqISS):'')+
         fld(p+'pctExp','% da receita de exportação',x.pctExp)+
         fld(p+'pctB2B','% vendido a contribuintes (B2B)',x.pctB2B)+fld(p+'red','Redução CBS/IBS da LC 214 (0, 30, 60 ou 100)',x.red)+
@@ -2241,6 +2246,7 @@ function lerForm(){
     let v=el.value;
     if(el.dataset.b)v=v==='1';
     else if(el.type==='number')v=v===''?(el.dataset.blank?'':0):parseFloat(v);
+    if(/\.aliqICMS$/.test(el.dataset.p)){const k=el.dataset.p.split('.');let o=S;for(let i=0;i<k.length-1;i++)o=o&&o[k[i]];if(o&&+o.aliqICMS!==+v)o.aliqEst=false}
     setPath(S,el.dataset.p,v);
   });
   S.example=false;

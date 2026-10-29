@@ -526,8 +526,12 @@ function indiretos(Y,A,P,ano,cbs,regime){
   if((regime==='presumido'||regime==='real')&&P.ttd&&P.ttd.length&&A.baseIcms>0){
     const r0=A.icmsDeb/A.baseIcms;
     P.ttd.forEach(t=>{const pct=Math.min(t.pct,1-shareT);if(pct<=0||t.carga==null)return;shareT+=pct;
-      const bt=A.baseIcms*pct,ar=t.tipo==='p478'?t.aliqInter:r0,tax=bt*t.carga,ben=Math.max(0,bt*ar-tax),fundo=t.fundos*ben,est=t.estorna?Y.icmsCred*pct:0;
-      ttdRem+=bt*r0;ttdTax+=tax;ttdFundo+=fundo;ttdBen+=ben;ttdEst+=est;ttdIt.push({cod:t.cod,bt,carga:t.carga,ar,tax,ben,fundo,est,pct})});
+      const bt=A.baseIcms*pct,est=t.estorna?Y.icmsCred*pct:0;
+      const cls=t.mix?[4,7,12].filter(c=>t.mix[c]>0).map(c=>[c,t.mix[c]]):[[Math.round(t.aliqInter*100),1]];
+      let tax=0,ben=0,arM=0;
+      cls.forEach(([c,sh])=>{const btc=bt*sh,ar=t.tipo==='p478'?c/100:r0,cg=t.tipo==='p478'&&t.cargaOv==null&&TAB478[c]!=null?TAB478[c]/100:t.carga,tx=btc*cg;tax+=tx;ben+=Math.max(0,btc*ar-tx);arM+=ar*sh});
+      const fundo=t.fundos*ben;
+      ttdRem+=bt*r0;ttdTax+=tax;ttdFundo+=fundo;ttdBen+=ben;ttdEst+=est;ttdIt.push({cod:t.cod,bt,carga:bt>0?tax/bt:t.carga,ar:arM,tax,ben,fundo,est,pct,mix:t.mix||null})});
   }
   const temTtd=ttdIt.length>0;
   const icmsBr=temTtd?Math.max(0,A.icmsDeb-ttdRem+ttdTax+ttdFundo-(Y.icmsCred-ttdEst)):icmsSem;
@@ -774,12 +778,15 @@ function norm(S){
   const T=S.ttd||{possui:'',itens:[]},pend=[],tiAll=(T.possui==='sim'&&Array.isArray(T.itens))?T.itens:[];
   N.P.ttd=tiAll.map(t=>{const tipo=t.tipo==='p478'?'p478':'manual',ai=(+t.aliqInter||7)/100;let c=(t.cargaEf===''||t.cargaEf==null)?null:(+t.cargaEf)/100;
     if(tipo==='p478'&&c==null)c=TAB478[Math.round(ai*100)]!=null?TAB478[Math.round(ai*100)]/100:null;
-    return {cod:String(t.cod||'?'),nome:t.nome||'',tipo,pct:Math.min(1,Math.max(0,(+t.pctReceita||0)/100)),carga:c,aliqInter:ai,fundos:(+t.fundos||0)/100,estorna:!!t.estorna}});
+    const au=(t.modo!=='manual'&&t.auto&&t.auto.pct!=null)?t.auto:null,ov=(t.cargaEf===''||t.cargaEf==null)?null:(+t.cargaEf)/100;
+    let mix=null;if(au&&au.cl){const tot=(+au.cl[4]||0)+(+au.cl[7]||0)+(+au.cl[12]||0);if(tot>0)mix={4:(+au.cl[4]||0)/tot,7:(+au.cl[7]||0)/tot,12:(+au.cl[12]||0)/tot}}
+    if(tipo==='p478'&&mix&&c==null)c=.02;
+    return {cod:String(t.cod||'?'),nome:t.nome||'',tipo,pct:au?Math.min(1,Math.max(0,+au.pct||0)):Math.min(1,Math.max(0,(+t.pctReceita||0)/100)),carga:c,cargaOv:ov,mix:tipo==='p478'?mix:null,aliqInter:ai,fundos:(+t.fundos||0)/100,estorna:!!t.estorna,aguardaAuto:!!(t.autoKind&&t.modo!=='manual'&&!t.auto)}});
   N.P.ttdExcl=!!T.exclLucro;
   if(T.possui==='')pend.push({t:'Informar se a empresa possui TTD de Santa Catarina (Passo 1)',crit:false});
   else if(T.possui==='nao_sei')pend.push({t:'Verificar se a empresa possui TTD (consulta SEF-SC)',crit:false});
   else if(T.possui==='sim'){if(!tiAll.length)pend.push({t:'Informar qual TTD a empresa possui',crit:true});
-    N.P.ttd.forEach(t=>{if(!(t.pct>0))pend.push({t:'TTD '+t.cod+': informar o % da receita de mercadorias com o tratamento',crit:true});else if(t.carga==null)pend.push({t:'TTD '+t.cod+': informar a carga efetiva de ICMS nas operações beneficiadas',crit:true})})}
+    N.P.ttd.forEach(t=>{if(t.aguardaAuto)pend.push({t:'TTD '+t.cod+': anexe as notas de saída para o cálculo automático (ou informe manualmente)',crit:true});else if(!(t.pct>0))pend.push({t:'TTD '+t.cod+': não há vendas elegíveis nas notas; confira ou informe o % da receita à mão',crit:true});else if(t.carga==null)pend.push({t:'TTD '+t.cod+': informar a carga efetiva de ICMS nas operações beneficiadas',crit:true})})}
   N.P.ttdPend=pend;
   N.hist.rec=meses12(S.histRecMensal,+S.histRec||0);
   N.hist.fol=Array(12).fill((+S.histFolha||0)/12);
@@ -968,7 +975,7 @@ function renderRes(){
     const Y27=N.anos[2027];if(Y27.icmsCred+Y27.baseCredCBS>0)pq.push(`Créditos de entrada considerados nos regimes que os aproveitam: ICMS de ${brl(Y27.icmsCred)} e base de ${brl(Y27.baseCredCBS)} para CBS/IBS. O Simples comum não aproveita esses créditos, mas tem alíquota efetiva menor.`);}
   const porq=pq.length&&!crit.length?`<div class="card"><div class="cardh"><div><h3>Por que ${REG[w27.nome]}?</h3><p class="small">As diferenças que mais pesam, em 2027.</p></div><button class="btn ghost sm" id="irImp" type="button">Ver imposto por imposto</button></div><ul class="tight">${pq.map(t=>'<li>'+t+'</li>').join('')}</ul></div>`:'';
   const tpz=r27.presumido&&r27.presumido.ttd,trz=r27.real&&r27.real.ttd,tx=tpz||trz;
-  const ttdB=tx?`<div class="banner" style="margin-bottom:16px"><b>TTD considerado: ${tx.cods}.</b> Em 2027, o ICMS fica ${tpz?brl(tpz.economia)+' menor no Presumido':''}${tpz&&trz?' e ':''}${trz?brl(trz.economia)+' menor no Real':''} por ano. O benefício não vale no Simples, em que o ICMS vem dentro do DAS.</div>`:'';
+  const ttdB=tx?`<div class="banner" style="margin-bottom:16px"><b>TTD considerado: ${tx.cods}</b> (${tx.itens.map(i=>'TTD '+i.cod+': '+pc(i.pct,1)+' da receita de mercadorias').join('; ')}). Em 2027, o ICMS fica ${tpz?brl(tpz.economia)+' menor no Presumido':''}${tpz&&trz?' e ':''}${trz?brl(trz.economia)+' menor no Real':''} por ano. O benefício não vale no Simples, em que o ICMS vem dentro do DAS.</div>`:'';
   h+=`${ttdB}<div class="dgrid">${comp}${faz}</div>${porq}`;
   h+=`<h2 style="margin-top:34px">Análise detalhada</h2><p class="sub" style="margin-bottom:16px">Gráficos, limites do Simples, prazos e tabelas completas para quem quer conferir os números.</p>`;
   h+=`<div class="dgrid">`;
@@ -1381,13 +1388,14 @@ function lerXml(text,ign){
   const ide=xq(inf,'ide'),emit=xq(inf,'emit'),dest=xq(inf,'dest'),prot=xq(root,'infProt');
   const dh=xt(ide,'dhEmi')||xt(ide,'dEmi');
   const doc={tipo:'nfe',chave:(inf.getAttribute('Id')||'').replace(/^NFe/,'')||xt(root,'chNFe'),mod:xt(ide,'mod'),tpNF:xt(ide,'tpNF'),
-    dh:dh.slice(0,10),cStat:prot?xt(prot,'cStat'):null,emit:xcad(emit),crt:xt(emit,'CRT'),dest:xcad(dest),itens:[]};
+    dh:dh.slice(0,10),cStat:prot?xt(prot,'cStat'):null,emit:xcad(emit),crt:xt(emit,'CRT'),dest:xcad(dest),itens:[],
+    ufEmit:xt(xq(emit,'enderEmit'),'UF'),ufDest:xt(xq(dest,'enderDest'),'UF'),idDest:xt(ide,'idDest'),indFinal:xt(ide,'indFinal'),indPres:xt(ide,'indPres'),indIEDest:xt(dest,'indIEDest')};
   for(const det of inf.getElementsByTagNameNS('*','det')){
     const p=xq(det,'prod'),im=xq(det,'imposto'),icms=xq(im,'ICMS'),ig=icms?icms.firstElementChild:null,pis=xq(im,'PIS'),pg=pis?pis.firstElementChild:null;
     if(xt(p,'indTot')==='0')continue;
     doc.itens.push({cfop:xt(p,'CFOP'),vProd:xn(p,'vProd'),vFrete:xn(p,'vFrete'),vSeg:xn(p,'vSeg'),vOutro:xn(p,'vOutro'),vDesc:xn(p,'vDesc'),
       vIPI:xn(xq(im,'IPI'),'vIPI'),icmsCst:ig?(xt(ig,'CST')||xt(ig,'CSOSN')):'',vICMS:ig?xn(ig,'vICMS'):0,vST:ig?xn(ig,'vICMSST'):0,
-      vCredSN:ig?xn(ig,'vCredICMSSN'):0,pisCst:pg?xt(pg,'CST'):''});
+      vCredSN:ig?xn(ig,'vCredICMSSN'):0,pisCst:pg?xt(pg,'CST'):'',orig:ig?xt(ig,'orig'):''});
   }
   return doc;
 }
@@ -1416,12 +1424,17 @@ function papelDoc(d,cn){
   if(d.tipo==='cte'){ return same(d.toma)?'frete':null }
   return null;
 }
+function aliqInterClasse(ufE,ufD,orig){
+  if(['1','2','3','8'].includes(orig))return 4;
+  const SSE=['SP','RJ','MG','PR','RS','SC'];
+  return SSE.includes(ufE)&&!SSE.includes(ufD)?7:12;
+}
 function agregarXml(st){
   const cn=st.cnpj.length>=14?st.cnpj.slice(0,8):st.cnpj;
   const seen=new Set(),por={},c={dup:0,canc:0,naoAut:0,terceiros:0};
   const mk=()=>({rec:{},recTipo:{comercio:0,industria:0,servico:0},st:0,mono:0,exp:0,eligBase:0,icmsVal:0,devol:{},devCompra:0,
     compras:{},comprasTot:0,icmsCred:0,baseCredPC:0,baseCredCBS:0,fornSimples:0,uso:0,ativo:0,outras:0,nSaida:0,nEntrada:0,meses:new Set(),
-    servPrest:0,issPrest:0,baseIssPrest:0,nPrest:0,servTom:0,servTomSimples:0,issTom:0,nTom:0,frete:0,freteIcms:0,freteSimples:0,nFrete:0,servTomMes:{},freteMes:{}});
+    interCF:0,ecom:{base:0,cl:{4:0,7:0,12:0}},impBase:0,servPrest:0,issPrest:0,baseIssPrest:0,nPrest:0,servTom:0,servTomSimples:0,issTom:0,nTom:0,frete:0,freteIcms:0,freteSimples:0,nFrete:0,servTomMes:{},freteMes:{}});
   for(const d of st.docs){
     if(seen.has(d.chave)){c.dup++;continue} seen.add(d.chave);
     if(st.cancel.has(d.chave)){c.canc++;continue}
@@ -1440,7 +1453,10 @@ function agregarXml(st){
         const tipo=k==='servico'?'servico':INDUSTRIA.includes(cf)?'industria':'comercio'; Y.recTipo[tipo]+=base;
         const ex=String(it.cfop)[0]==='7',stt=it.icmsCst==='60'||it.icmsCst==='500',mo=it.pisCst==='04';
         if(ex)Y.exp+=base; if(stt)Y.st+=base; if(mo)Y.mono+=base;
-        if(k==='receita'&&!ex&&!stt){Y.eligBase+=base;Y.icmsVal+=it.vICMS}
+        if(k==='receita'&&!ex&&!stt){Y.eligBase+=base;Y.icmsVal+=it.vICMS;
+          const inter=d.idDest==='2'||(d.ufEmit&&d.ufDest&&d.ufEmit!==d.ufDest);
+          if(inter&&d.indFinal==='1'&&d.indIEDest==='9'){Y.interCF+=base;if(['2','3'].includes(d.indPres)){Y.ecom.base+=base;const c=aliqInterClasse(d.ufEmit,d.ufDest,it.orig);Y.ecom.cl[c]=(Y.ecom.cl[c]||0)+base}}
+          if(['1','2','3','8'].includes(it.orig))Y.impBase+=base}
       }else if(k==='devol_venda'){Y.devol[mes]=(Y.devol[mes]||0)+base}
       else if(k==='devol_compra'){Y.devCompra+=custo}
       else if(k==='insumo_revenda'){
@@ -1570,7 +1586,7 @@ function xmlRender(){
   const anos=Object.keys(por).sort(); if(!st.ano||!por[st.ano])st.ano=anos[anos.length-1];
   const Y=por[st.ano];
   ui.docs=ui.docs||{};
-  if(Y)ui.docs.xml={Y,ano:st.ano,c,ign,ndocs:st.docs.length,cnpj:cn};
+  if(Y){ui.docs.xml={Y,ano:st.ano,c,ign,ndocs:st.docs.length,cnpj:cn};ttdAuto();if(typeof refreshTtd==='function')refreshTtd()}
   const cn8=cn.length>=14?cn.slice(0,8):cn;
   const fora=[];
   for(const s of SLOTS){const bad=st.slots[s.id].docs.filter(d=>{const p=papelDoc(d,cn8);return p&&!ESPERADO[s.id].includes(p)}).length;if(bad)fora.push(`${bad} documento(s) em “${s.t}” têm outro papel para este CNPJ (por exemplo, nota de entrada no campo de saída). Foram usados mesmo assim, conforme o papel real.`)}
@@ -1585,6 +1601,7 @@ function xmlRender(){
     kpi('Documentos lidos',String(st.docs.length),descart?descart+' descartado(s): duplicado, cancelado ou não autorizado':'Nenhum descartado')+
     kpi('Receita bruta '+st.ano,brl(rec),'Devoluções de '+brl(dev))+
     (Y.nPrest?kpi('Serviços prestados',brl(Y.servPrest),Y.nPrest+' NFS-e'+(Y.baseIssPrest?' · ISS '+pc(Y.issPrest/Y.baseIssPrest,1):'')):'')+
+    kpi('Interestadual a consumidor final',brl(Y.interCF||0),(Y.ecom&&Y.ecom.base>0?brl(Y.ecom.base)+' por internet ou telemarketing':'não contribuinte de outro estado'))+
     kpi('ICMS-ST',rec?pc(Y.st/rec,1):'—','Parcela da receita (substituído)')+
     kpi('Monofásico',rec?pc(Y.mono/rec,1):'—','Parcela da receita (PIS/COFINS)')+
     kpi('Exportação',rec?pc(Y.exp/rec,1):'—','Parcela da receita')+
@@ -1610,6 +1627,7 @@ function xmlRender(){
   if(Y.icmsVal===0&&Y.eligBase>0)av.push('As notas de saída não destacam ICMS, o que é normal para empresa do Simples. A alíquota de ICMS por atividade precisa ser informada à mão.');
   if(nm<12)av.push(`Os documentos cobrem ${nm} de 12 meses de ${st.ano}. <label style="display:inline;color:inherit;font-weight:700"><input id="xmlAnual" type="checkbox" ${st.anual?'checked':''}> Projetar o ano pela média dos meses lidos</label> (hipótese: multiplica por ${nm>0?(12/nm).toFixed(2).replace('.',','):'—'}).`);
   av.push('Valores estimados a partir de CFOP, CST e layouts de NFS-e e CT-e: confira por amostragem. A base de CBS/IBS usa o valor do documento e ainda precisa ser conferida com a LC 214.');
+  if(Y.ecom&&Y.ecom.base>0&&!(S.ttd&&S.ttd.possui==='sim'&&S.ttd.itens.some(i=>i.cod==='478')))av.push(`Encontramos ${brl(Y.ecom.base)} em vendas pela internet ou telemarketing a consumidor final não contribuinte de outro estado (${pc(Y.eligBase>0?Y.ecom.base/Y.eligBase:0,1)} da receita de mercadorias). Se a empresa estiver, ou puder estar, no regime normal, elas podem ser elegíveis ao TTD 478. <button class="btn ghost sm" id="ttdSug" type="button">Considerar o TTD 478 no cálculo</button>`);
   h+=av.map(a=>`<div class="banner warn" style="margin-top:12px">${a}</div>`).join('')+`</div>`;
   o.innerHTML=h; wireXml();
 }
@@ -1618,6 +1636,7 @@ function wireXml(){
   const cn=$('#xmlCnpj'); if(cn)cn.onchange=()=>{st.cnpj=dig(cn.value);xmlRender()};
   const an=$('#xmlAno'); if(an)an.onchange=()=>{st.ano=an.value;xmlRender()};
   const au=$('#xmlAnual'); if(au)au.onchange=()=>{st.anual=au.checked;xmlRender()};
+  const sg=$('#ttdSug'); if(sg)sg.onclick=()=>{S.ttd=S.ttd||{possui:'',itens:[],exclLucro:false};lerCard('#ttdCard');S.ttd.possui='sim';if(!S.ttd.itens.some(i=>i.cod==='478'))S.ttd.itens.push(ttdPreset('478'));ttdAuto();refreshTtd();xmlRender()};
 }
 function aplicarTudo(){
   const r=pgState&&!pgState.erro?pgState:null,st=xmlState,r2=v=>Math.round(v*100)/100;
@@ -1653,7 +1672,7 @@ function aplicarTudo(){
     }
     if(!r&&st.ano==='2025'&&nm===12){N.histRec=r2(rec-dev);N.histRecMensal=[...Array(12)].map((_,i)=>{const m=String(i+1).padStart(2,'0');return ((Y.rec[m]||0)-(Y.devol[m]||0)).toFixed(2).replace('.',',')}).join('; ')}
   }
-  S=N;
+  S=N; ttdAuto();
   ui.msg='Documentos aplicados. O aviso amarelo em “Dados da empresa” lista só o que ainda falta e se aplica às suas atividades.';
   renderDados(); calcular(); setTab('rel'); window.scrollTo(0,0);
 }
@@ -1828,7 +1847,7 @@ function montarRelatorio(){
   if(crit.length)h+=parecer('atencao','Valores preliminares: faltam dados essenciais (ver item 2). Não use este quadro para decidir.');
   h+=`<h3>2026 (aferição)</h3>`+tabelaAno(r26,2026);
   h+=`<h3>2027 (cenário base de CBS ${pc4(N.P.cbs.base)})</h3>`+tabelaAno(r27,2027);
-  {const a=r27.presumido&&r27.presumido.ttd,b=r27.real&&r27.real.ttd,t=a||b;if(t)h+=parecer('atencao',`TTD considerado: ${t.cods}. Em 2027, o ICMS fica ${a?brl(a.economia)+' menor no Presumido':''}${a&&b?' e ':''}${b?brl(b.economia)+' menor no Real':''} por ano, com contrapartida a fundos já incluída. O benefício não se aplica ao Simples. As regras do TTD vêm de fontes secundárias e dependem do termo de concessão; os benefícios de ICMS também seguem a transição da reforma tributária.`)}
+  {const a=r27.presumido&&r27.presumido.ttd,b=r27.real&&r27.real.ttd,t=a||b;if(t)h+=parecer('atencao',`TTD considerado: ${t.cods} (${t.itens.map(i=>'TTD '+i.cod+': '+pc(i.pct,1)+' da receita de mercadorias').join('; ')}). Em 2027, o ICMS fica ${a?brl(a.economia)+' menor no Presumido':''}${a&&b?' e ':''}${b?brl(b.economia)+' menor no Real':''} por ano, com contrapartida a fundos já incluída. O benefício não se aplica ao Simples. As regras do TTD vêm de fontes secundárias e dependem do termo de concessão; os benefícios de ICMS também seguem a transição da reforma tributária.`)}
   h+=`<h3>Sensibilidade</h3><div class="scroll"><table><thead><tr><th>Cenário (2027)</th><th>Regime vencedor</th><th>Resultado líquido</th></tr></thead><tbody>`+
     Object.keys(R[2027]).map(k=>{const w=ranking(R[2027][k])[0];return `<tr><td>CBS ${pc4(N.P.cbs[k])}</td><td>${REG[w.nome]}</td><td class="n">${brl(w.liq)}</td></tr>`}).join('')+
     est.map(([l,n])=>`<tr><td>${l} (CBS base)</td><td>${REG[n]}</td><td class="n">—</td></tr>`).join('')+`</tbody></table></div>`;
@@ -1911,6 +1930,7 @@ function restaurarDocs(sn){
   if(sn.pg){pgState=sn.pg;ui.pgMeses=sn.pg.meses||null;ui.docs.pg=sn.pg}
   if(sn.xml&&sn.xml.Y)ui.docs.xml=Object.assign({},sn.xml,{Y:Object.assign({},sn.xml.Y,{meses:new Set(sn.xml.Y.meses||[])})});
   ui.slotSaved=sn.counts||null;
+  if(typeof ttdAuto==='function'&&S&&S.ttd)ttdAuto();
 }
 const VERSAO_PROG='2026-10-30';
 function completarS(s){
@@ -2030,12 +2050,12 @@ function renderPlan(){
 const TTD_FONTE='Catálogo parcial montado a partir de fontes secundárias (suporte técnico e consultorias). A lista oficial está no serviço “Consultar TTD” da SEF-SC e no RICMS/SC, Anexo 2. Confirme cada percentual no termo de concessão da empresa.';
 const NOTA_GEN='Dados obtidos de material de suporte técnico: confirme o benefício no termo de concessão e informe a carga efetiva do ICMS nas operações beneficiadas (ou o crédito presumido equivalente).';
 const TTDS=[
- {cod:'478',nome:'E-commerce: vendas interestaduais a consumidor final não contribuinte',setor:'Comércio eletrônico',tipo:'p478',fundos:2,estorna:true,ref:'RICMS/SC, Anexo 2, art. 21, XV',
+ {cod:'478',nome:'E-commerce: vendas interestaduais a consumidor final não contribuinte',setor:'Comércio eletrônico',tipo:'p478',auto:'ecom',fundos:2,estorna:true,ref:'RICMS/SC, Anexo 2, art. 21, XV',
   nota:'Crédito presumido de ICMS nas vendas pela internet ou telemarketing a consumidor final não contribuinte de outro estado. A carga efetiva por alíquota interestadual (4% → 1%; 7% → 2%; 12% → 2%) vem de fonte secundária e deve ser confirmada. A contrapartida de 2% do crédito presumido ao FUMDES consta do termo de concessão. O DIFAL do estado de destino continua devido e não é modelado. O Decreto 1.416/2026 mexeu na regra de vedação ao crédito presumido: confira o efeito.'},
- {cod:'409',nome:'Importação: diferimento do ICMS no desembaraço e crédito presumido na saída (com antecipação)',setor:'Importação',tipo:'manual',fundos:4.5,estorna:false,ref:'RICMS/SC, Anexo 2, art. 246',
+ {cod:'409',auto:'importada',nome:'Importação: diferimento do ICMS no desembaraço e crédito presumido na saída (com antecipação)',setor:'Importação',tipo:'manual',fundos:4.5,estorna:false,ref:'RICMS/SC, Anexo 2, art. 246',
   nota:'Contrapartida de 2,5% ao Fundo Social e 2,0% ao FUMDES sobre o valor da exoneração (fonte secundária). As fontes divergem sobre a antecipação do ICMS neste TTD. Informe a carga efetiva da saída posterior.'},
- {cod:'410',nome:'Importação: diferimento do ICMS no desembaraço e crédito presumido na saída (sem antecipação)',setor:'Importação',tipo:'manual',fundos:4.5,estorna:false,ref:'RICMS/SC, Anexo 2, art. 246',nota:'Contrapartida de 2,5% ao Fundo Social e 2,0% ao FUMDES sobre a exoneração (fonte secundária). Informe a carga efetiva da saída posterior.'},
- {cod:'411',nome:'Importação: diferimento do ICMS no desembaraço e crédito presumido na saída (com garantia)',setor:'Importação',tipo:'manual',fundos:4.5,estorna:false,ref:'RICMS/SC, Anexo 2, art. 246',nota:'Contrapartida de 2,5% ao Fundo Social e 2,0% ao FUMDES sobre a exoneração (fonte secundária). Informe a carga efetiva da saída posterior.'},
+ {cod:'410',auto:'importada',nome:'Importação: diferimento do ICMS no desembaraço e crédito presumido na saída (sem antecipação)',setor:'Importação',tipo:'manual',fundos:4.5,estorna:false,ref:'RICMS/SC, Anexo 2, art. 246',nota:'Contrapartida de 2,5% ao Fundo Social e 2,0% ao FUMDES sobre a exoneração (fonte secundária). Informe a carga efetiva da saída posterior.'},
+ {cod:'411',auto:'importada',nome:'Importação: diferimento do ICMS no desembaraço e crédito presumido na saída (com garantia)',setor:'Importação',tipo:'manual',fundos:4.5,estorna:false,ref:'RICMS/SC, Anexo 2, art. 246',nota:'Contrapartida de 2,5% ao Fundo Social e 2,0% ao FUMDES sobre a exoneração (fonte secundária). Informe a carga efetiva da saída posterior.'},
  {cod:'47',nome:'Confecção',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2',nota:NOTA_GEN},
  {cod:'65',nome:'Indústria de informática: crédito presumido',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2, art. 142',nota:NOTA_GEN},
  {cod:'71',nome:'Indústria de informática: crédito presumido',setor:'Indústria',tipo:'manual',fundos:2,estorna:false,ref:'RICMS/SC, Anexo 2, art. 142',nota:NOTA_GEN},
@@ -2055,12 +2075,12 @@ const TTDS=[
 const TTD_ORD=[...TTDS].sort((a,b)=>(+a.cod)-(+b.cod));
 function ttdPreset(cod){
   const c=TTD_ORD.find(t=>t.cod===cod);
-  if(c)return {cod:c.cod,nome:c.nome,tipo:c.tipo,pctReceita:'',aliqInter:7,cargaEf:'',fundos:c.fundos,estorna:c.estorna,ref:c.ref,nota:c.nota};
-  return {cod:cod,nome:'',tipo:'manual',pctReceita:'',aliqInter:7,cargaEf:'',fundos:2,estorna:false,ref:'Informado pelo usuário',nota:'TTD informado manualmente: confirme as condições no termo de concessão.'};
+  if(c)return {cod:c.cod,nome:c.nome,tipo:c.tipo,modo:c.auto?'auto':'manual',autoKind:c.auto||null,auto:null,pctReceita:'',aliqInter:7,cargaEf:'',fundos:c.fundos,estorna:c.estorna,ref:c.ref,nota:c.nota};
+  return {cod:cod,nome:'',tipo:'manual',modo:'manual',autoKind:null,auto:null,pctReceita:'',aliqInter:7,cargaEf:'',fundos:2,estorna:false,ref:'Informado pelo usuário',nota:'TTD informado manualmente: confirme as condições no termo de concessão.'};
 }
 function cardTtd(){
   const t=S.ttd||(S.ttd={possui:'',itens:[],exclLucro:false}),its=t.itens||[];
-  const bad=its.some(x=>!(+x.pctReceita>0)||(x.tipo!=='p478'&&(x.cargaEf===''||x.cargaEf==null)));
+  const bad=its.some(x=>{const auto=x.autoKind&&x.modo!=='manual',okp=auto?!!x.auto&&x.auto.pct>0:+x.pctReceita>0;return !okp||(x.tipo!=='p478'&&(x.cargaEf===''||x.cargaEf==null))});
   const chip=t.possui===''?['warn','Responder']:t.possui==='nao'?['ok','Não possui']:t.possui==='nao_sei'?['warn','Verificar']:(!its.length||bad?['warn','Preencher']:['ok',its.length+' TTD']);
   let h=`<details class="card step" open id="ttdCard"><summary><div><div class="k">Passo 1 · antes de anexar os documentos</div><h3>A empresa possui algum TTD de Santa Catarina?</h3></div><span class="st-chip ${chip[0]}">${chip[1]}</span></summary><div class="stepbody">
   <p class="small" style="max-width:74ch">O TTD (Tratamento Tributário Diferenciado) é um benefício de ICMS do estado, como o TTD 478 do e-commerce. Ele vale nos regimes Presumido e Real: no Simples o ICMS vem dentro do DAS. Por isso, se a empresa tem ou poderia ter um TTD, ele entra na comparação.</p>
@@ -2069,24 +2089,43 @@ function cardTtd(){
   if(t.possui==='sim'){
     h+=`<div class="grid" style="align-items:end"><div><label for="ttdSel">Qual TTD?</label><select id="ttdSel">${TTD_ORD.map(c=>`<option value="${c.cod}">TTD ${c.cod} · ${esc(c.nome)}</option>`).join('')}</select></div><div><button class="btn sm" id="ttdAdd" type="button">Adicionar este TTD</button></div></div>
     <details class="mini" style="margin-top:10px"><summary>O TTD não está na lista</summary><div class="grid" style="align-items:end"><div><label for="ttdOc">Código</label><input id="ttdOc" type="text" placeholder="ex.: 999"></div><div><label for="ttdOn">Descrição</label><input id="ttdOn" type="text" placeholder="ex.: atacadista"></div><div><button class="btn ghost sm" id="ttdAddO" type="button">Adicionar outro TTD</button></div></div></details>`;
-    its.forEach((x,i)=>{const p=`ttd.itens.${i}.`,tab=x.tipo==='p478'?TAB478[+x.aliqInter]:null;
-      h+=`<div class="act" style="margin-top:14px"><div class="row" style="justify-content:space-between"><div><b>TTD ${esc(x.cod)}</b> <span class="small">· ${esc(x.nome||'descrição não informada')}</span></div><button class="lk" type="button" data-ttdrm="${i}">Remover</button></div><div class="grid" style="margin-top:10px">`+
-        fld(p+'pctReceita','% da receita de mercadorias vendida com este TTD',x.pctReceita)+
-        (x.tipo==='p478'?`<div><label for="f-${p}aliqInter">Alíquota interestadual predominante</label><select id="f-${p}aliqInter" data-p="${p}aliqInter">${[[4,'4% (produtos importados)'],[7,'7% (N, NE, CO e ES)'],[12,'12% (S e SE)']].map(([v,l])=>`<option value="${v}" ${+x.aliqInter===v?'selected':''}>${l}</option>`).join('')}</select></div>`:'')+
-        fld(p+'cargaEf','Carga efetiva de ICMS nas vendas com TTD (%)'+(tab!=null?' · sugerida: '+tab:''),x.cargaEf,'number',(tab!=null?`placeholder="${tab}" `:'')+'data-blank="1"')+
+    its.forEach((x,i)=>{const p=`ttd.itens.${i}.`,tab=x.tipo==='p478'?TAB478[+x.aliqInter]:null,ak=x.autoKind,au=x.auto,auto=ak&&x.modo!=='manual',R$=v=>brl(v||0);
+      let det='';
+      if(ak==='ecom'&&au)det=`<div class="banner ok" style="margin:10px 0">Detectado nas notas de ${esc(au.ano)}: <b>${R$(au.base)}</b> vendidos pela internet ou telemarketing a consumidor final não contribuinte de outro estado, ou seja, <b>${pc(au.pct,1)}</b> da receita de mercadorias. Por alíquota interestadual: 4% ${R$(au.cl[4])}, 7% ${R$(au.cl[7])}, 12% ${R$(au.cl[12])}.${au.interCF>au.base+1?` Outras vendas interestaduais a consumidor final sem internet ou telemarketing (${R$(au.interCF-au.base)}) ficam de fora.`:''}</div>`;
+      else if(ak==='importada'&&au)det=`<div class="banner ok" style="margin:10px 0">Detectado nas notas de ${esc(au.ano)}: <b>${pc(au.pct,1)}</b> da receita de mercadorias é de origem importada (origem 1, 2, 3 ou 8 nos itens). A carga efetiva da saída você informa abaixo.</div>`;
+      else if(ak)det=`<div class="banner warn" style="margin:10px 0">Anexe as notas de saída no passo seguinte: o sistema calcula sozinho a parcela elegível e as alíquotas. Se preferir, use o modo manual.</div>`;
+      h+=`<div class="act" style="margin-top:14px"><div class="row" style="justify-content:space-between"><div><b>TTD ${esc(x.cod)}</b> <span class="small">· ${esc(x.nome||'descrição não informada')}</span></div><button class="lk" type="button" data-ttdrm="${i}">Remover</button></div>`+
+        (ak?`<div class="seg" style="margin:10px 0 0" data-ttdmodo="${i}">${[['auto','Automático, pelas notas'],['manual','Manual']].map(([v,l])=>`<button type="button" data-m="${v}" aria-pressed="${(x.modo||'auto')===v}">${l}</button>`).join('')}</div>${det}`:'')+
+        (!auto?`<div class="grid" style="margin-top:10px">`+fld(p+'pctReceita','% da receita de mercadorias vendida com este TTD',x.pctReceita)+
+        (x.tipo==='p478'?`<div><label for="f-${p}aliqInter">Alíquota interestadual predominante</label><select id="f-${p}aliqInter" data-p="${p}aliqInter">${[[4,'4% (produtos importados)'],[7,'7% (N, NE, CO e ES)'],[12,'12% (S e SE)']].map(([v,l])=>`<option value="${v}" ${+x.aliqInter===v?'selected':''}>${l}</option>`).join('')}</select></div>`:'')+`</div>`:'')+
+        `<details class="mini" style="margin-top:10px"><summary>Ajustes avançados e fonte</summary><div class="grid" style="margin-top:10px">`+
+        fld(p+'cargaEf','Carga efetiva de ICMS nas vendas com TTD (%)'+(x.tipo==='p478'?' · vazio usa a tabela do TTD por alíquota (4% → 1; 7% → 2; 12% → 2)':' · obrigatório'),x.cargaEf,'number','data-blank="1"')+
         fld(p+'fundos','Contrapartida a fundos (% do benefício)',x.fundos)+
         `<div><label for="f-${p}estorna">Estorna créditos de entrada das mercadorias vendidas</label><select id="f-${p}estorna" data-p="${p}estorna" data-b="1"><option value="1" ${x.estorna?'selected':''}>Sim</option><option value="0" ${!x.estorna?'selected':''}>Não</option></select></div></div>
-        <details class="mini" style="margin-top:8px"><summary>Regras e fonte deste TTD</summary><div class="small" style="max-width:80ch">${esc(x.nota||'')}<br><b>Referência:</b> ${esc(x.ref||'')}</div></details></div>`});
+        <div class="small" style="max-width:80ch;margin-top:8px">${esc(x.nota||'')}<br><b>Referência:</b> ${esc(x.ref||'')}</div></details></div>`});
     if(its.length)h+=`<div class="grid" style="margin-top:12px"><div><label for="f-ttd.exclLucro">Excluir o benefício da base do IRPJ e da CSLL no Lucro Real (subvenção para investimento)</label><select id="f-ttd.exclLucro" data-p="ttd.exclLucro" data-b="1"><option value="0" ${!t.exclLucro?'selected':''}>Não (mais conservador)</option><option value="1" ${t.exclLucro?'selected':''}>Sim, se cumpre as condições legais</option></select></div></div><p class="small">A exclusão exige o cumprimento das condições da LC 160/2017 (reserva de incentivos fiscais). Confirme com o contador.</p>`;
     h+=`<p class="small" style="margin-top:12px">${esc(TTD_FONTE)}</p>`;
   }
   return h+`</div></details>`;
 }
+function ttdAuto(){
+  const xm=ui.docs&&ui.docs.xml; if(!xm||!xm.Y||!S.ttd||!S.ttd.itens)return;
+  const Y=xm.Y,el=Y.eligBase||0,ec=Y.ecom||{base:0,cl:{}};
+  S.ttd.itens.forEach(x=>{
+    if(x.autoKind==='ecom')x.auto={ano:xm.ano,pct:el>0?ec.base/el:0,base:ec.base,eligBase:el,interCF:Y.interCF||0,cl:{4:ec.cl[4]||0,7:ec.cl[7]||0,12:ec.cl[12]||0}};
+    else if(x.autoKind==='importada')x.auto={ano:xm.ano,pct:el>0?(Y.impBase||0)/el:0,base:Y.impBase||0,eligBase:el};
+  });
+}
+function lerCard(sel){
+  document.querySelectorAll(sel+' [data-p]').forEach(el=>{let v=el.value;if(el.dataset.b)v=v==='1';else if(el.type==='number')v=v===''?(el.dataset.blank?'':0):parseFloat(v);setPath(S,el.dataset.p,v)});
+}
+function refreshTtd(){const el=$('#ttdCard');if(!el)return;lerCard('#ttdCard');el.outerHTML=cardTtd();ligaTtd();}
 function ligaTtd(){
   document.querySelectorAll('#segTtd button').forEach(b=>b.onclick=()=>{lerForm();S.ttd=S.ttd||{possui:'',itens:[],exclLucro:false};S.ttd.possui=b.dataset.v;renderDados()});
-  const add=$('#ttdAdd'); if(add)add.onclick=()=>{lerForm();const c=$('#ttdSel').value;S.ttd.itens.push(ttdPreset(c));renderDados()};
+  const add=$('#ttdAdd'); if(add)add.onclick=()=>{lerForm();const c=$('#ttdSel').value;S.ttd.itens.push(ttdPreset(c));ttdAuto();renderDados()};
   const ao=$('#ttdAddO'); if(ao)ao.onclick=()=>{const c=$('#ttdOc').value.trim();if(!c)return;lerForm();const it=ttdPreset(c);it.nome=$('#ttdOn').value.trim();S.ttd.itens.push(it);renderDados()};
   document.querySelectorAll('[data-ttdrm]').forEach(b=>b.onclick=()=>{lerForm();S.ttd.itens.splice(+b.dataset.ttdrm,1);renderDados()});
+  document.querySelectorAll('[data-ttdmodo] button').forEach(b=>b.onclick=()=>{lerForm();S.ttd.itens[+b.parentElement.dataset.ttdmodo].modo=b.dataset.m;renderDados()});
 }
 
 /* ---------- Formulário ---------- */

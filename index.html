@@ -170,6 +170,30 @@ details.mini>div{padding:10px 0 0}
   th,td{white-space:normal;padding:6px 8px;font-size:11px}
   @page{margin:16mm 14mm}
 }
+
+/* ---- pré-visualização dos documentos ---- */
+.preview{margin-top:20px;padding-top:22px;border-top:1px solid var(--line)}
+.preview h3{margin:22px 0 10px}
+.preview>h3:first-child{margin-top:0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(176px,1fr));gap:12px;margin:0 0 6px}
+.kpi{background:var(--bg);border-radius:14px;padding:14px 16px;min-width:0}
+.kpi .l{font:700 10.5px var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.kpi .v{font:600 19px/1.25 var(--serif);margin-top:5px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.kpi .s{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.4}
+.kpi.warn{background:var(--warnbg)}.kpi.bad{background:var(--badbg)}.kpi.good{background:var(--goodbg)}
+.arows{display:grid;gap:10px}
+.arow{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,270px);gap:8px 18px;align-items:center;background:var(--bg);border-radius:14px;padding:14px 16px}
+.arow .d{font-size:13px;line-height:1.45;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.arow .chips2{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.arow .chips2 span{font:700 11.5px var(--sans);padding:4px 10px;border-radius:99px;background:var(--surface);border:1px solid var(--line);font-variant-numeric:tabular-nums}
+.verdict{display:flex;gap:14px;align-items:flex-start;border-radius:16px;padding:16px 18px;margin:18px 0 4px}
+.verdict.good{background:var(--goodbg)}.verdict.warn{background:var(--warnbg)}.verdict.bad{background:var(--badbg)}
+.verdict .ic{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:700 17px var(--sans);color:#fff;background:var(--good)}
+.verdict.warn .ic{background:#b97800}.verdict.bad .ic{background:var(--bad)}
+.verdict b{display:block;font:700 15px var(--sans);margin-bottom:2px}
+.verdict p{margin:0;font-size:13.5px;color:var(--muted)}
+.actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:18px}
+@media (max-width:560px){.arow{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi .v{font-size:16px}.kpi{padding:12px}}
 @media (max-width:560px){.bar{grid-template-columns:1fr auto}.bar .t{grid-column:1/-1;order:3}.card{padding:18px;border-radius:16px}.regime{font-size:22px}.bignum{font-size:34px}}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -864,6 +888,7 @@ function cardImport(){
   </div>
   <div id="pgOut" style="margin-top:16px"></div><div id="xmlOut" style="margin-top:16px"></div></div>`;
 }
+function kpi(l,v,s,k){return `<div class="kpi${k?' '+k:''}"><div class="l">${l}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:''}</div>`}
 function pgRender(){
   const r=pgState,o=$('#pgOut'); if(!o)return;
   if(!r){o.innerHTML='';return}
@@ -871,37 +896,32 @@ function pgRender(){
   const ch=m=>String(m).padStart(2,'0');
   const m25=[...Array(12)].map((_,i)=>r.meses['2025-'+ch(i+1)]);
   const completo=m25.every(v=>v!==undefined);
-  const cons=consolidarPGDAS(r);
-  const calc=dasPA(r);
-  let conf='';
-  if(calc===null)conf=`<span class="tag warn">Sem conferência</span> O extrato não informa o fator r; não dá para escolher entre os Anexos III e V.`;
-  else if(r.dasExtrato===null)conf=`<span class="tag warn">Sem conferência</span> Não encontrei o total do débito no extrato.`;
+  const calc=dasPA(r),tipos=Object.entries(TIPOS);
+  let ver;
+  if(calc===null)ver={k:'warn',ic:'!',t:'DAS sem conferência',d:'O extrato não informa o fator r; não dá para escolher entre os Anexos III e V.'};
+  else if(r.dasExtrato===null)ver={k:'warn',ic:'!',t:'DAS sem conferência',d:'Não encontrei o total do débito no extrato.'};
   else{const d=calc-r.dasExtrato;
-    conf=Math.abs(d)<=1?`<span class="tag good">Confere</span> DAS do período: o programa calculou ${brl2(calc)} e o extrato mostra ${brl2(r.dasExtrato)} (diferença ${brl2(d)}). As tabelas de alíquota e partilha usadas para esse anexo e faixa batem com a apuração oficial.`
-      :`<span class="tag bad">Diverge</span> DAS do período: o programa calculou ${brl2(calc)} e o extrato mostra ${brl2(r.dasExtrato)} (diferença ${brl2(d)}). Confira o tipo de cada atividade abaixo; se estiver certo, a tabela do programa precisa de revisão.`}
-  const tipos=Object.entries(TIPOS);
-  let h=`<div class="card" style="margin:0"><h3 style="margin-top:0">O que foi lido</h3><div class="scroll"><table><tbody>
-   <tr><td>Período de apuração</td><td class="n">${ch(r.pa.mes)}/${r.pa.ano}${r.regime?' · regime de '+esc(r.regime.toLowerCase()):''}</td></tr>
-   <tr><td>Município</td><td>${esc(r.local||'não informado')}</td></tr>
-   <tr><td>Receita do período (RPA)</td><td class="n">${brl2(r.rpa.tot)}${r.rpa.ext?' (exportação '+brl2(r.rpa.ext)+')':''}</td></tr>
-   <tr><td>RBT12</td><td class="n">${brl2(r.rbt12)}</td></tr>
-   <tr><td>Receita mensal de 2025</td><td class="n">${completo?'12 meses, total '+brl2(sum(m25)):'incompleta ('+m25.filter(v=>v!==undefined).length+' de 12 meses)'}</td></tr>
-   <tr><td>Folha dos 12 meses (fator r)</td><td class="n">${r.folha.length?brl2(sum(r.folha.map(f=>f.v))):'nenhuma informada'} · fator r: ${esc(r.frTxt||'não informado')}</td></tr>
-   <tr><td>Impedido de recolher ICMS/ISS no DAS</td><td>${esc(r.impedido||'não informado')}</td></tr>
-  </tbody></table></div>
-  <h3>Atividades</h3><div class="scroll"><table><thead><tr><th>Atividade no extrato</th><th>Tipo no planejador</th><th>Receita do período</th><th>ICMS-ST</th><th>Monofásico</th></tr></thead><tbody>`;
+    ver=Math.abs(d)<=1?{k:'good',ic:'✓',t:'DAS conferido com a apuração oficial',d:`O programa calculou ${brl2(calc)} e o extrato mostra ${brl2(r.dasExtrato)} (diferença de ${brl2(d)}). A tabela de alíquota e partilha usada para esses anexos e faixas bate com o PGDAS.`}
+      :{k:'bad',ic:'!',t:'DAS diverge da apuração oficial',d:`O programa calculou ${brl2(calc)} e o extrato mostra ${brl2(r.dasExtrato)} (diferença de ${brl2(d)}). Confira o tipo de cada atividade; se estiver certo, a tabela do programa precisa de revisão.`}}
+  let h=`<div class="preview"><h3>Extrato lido</h3><div class="kpis">`+
+    kpi('Período de apuração',ch(r.pa.mes)+'/'+r.pa.ano,r.regime?'Regime de '+esc(r.regime.toLowerCase()):'')+
+    kpi('Município',esc(r.local||'—'),r.optante==='Não'?'Não optante do Simples':'Optante do Simples')+
+    kpi('Receita do período',brl2(r.rpa.tot),r.rpa.ext?'Exportação '+brl2(r.rpa.ext):'Mercado interno')+
+    kpi('RBT12',brl2(r.rbt12),pc(r.rbt12/LIM,1)+' do limite de R$ 4,8 mi')+
+    kpi('Receita de 2025',completo?brl2(sum(m25)):'Incompleta','12 meses lidos'.replace('12',completo?'12':String(m25.filter(v=>v!==undefined).length)),completo?'':'warn')+
+    kpi('Folha para o fator r',r.folha.length?brl2(sum(r.folha.map(f=>f.v))):'Não informada','Fator r: '+esc(r.frTxt||'não informado'))+
+    kpi('ICMS/ISS no DAS',r.impedido==='Sim'?'Impedido':'Dentro do DAS','Sublimite de R$ 3,6 mi',r.impedido==='Sim'?'warn':'')+
+    `</div><h3>Atividades do período</h3><div class="arows">`;
   r.blocos.forEach((b,i)=>{
-    h+=`<tr><td style="white-space:normal;text-align:left;max-width:340px">${esc(b.desc.slice(0,110))}${b.desc.length>110?'…':''}${b.exp?' <span class="tag warn">exportação</span>':''}</td>
-    <td><select data-pgt="${i}" style="min-width:210px">${tipos.map(([k,t])=>`<option value="${k}" ${(b.tipo||'comercio')===k?'selected':''}>${esc(t.rot)}</option>`).join('')}</select></td>
-    <td class="n">${brl2(b.rev)}</td><td class="n">${brl2(b.st)}</td><td class="n">${brl2(b.mono)}</td></tr>`;
+    h+=`<div class="arow"><div><div class="d">${esc(b.desc)}</div><div class="chips2"><span>${brl2(b.rev)}</span>${b.st>0?`<span>ICMS-ST ${brl2(b.st)}</span>`:''}${b.mono>0?`<span>Monofásico ${brl2(b.mono)}</span>`:''}${b.exp?'<span>Exportação</span>':''}</div></div>
+    <div><label for="pgt${i}">Tipo no planejador</label><select id="pgt${i}" data-pgt="${i}">${tipos.map(([k,t])=>`<option value="${k}" ${(b.tipo||'comercio')===k?'selected':''}>${esc(t.rot)}</option>`).join('')}</select></div></div>`;
   });
-  h+=`</tbody></table></div><p style="margin-top:12px">${conf}</p>`;
-  if(r.optante==='Não')h+=`<div class="banner bad">O extrato diz que a empresa não é optante do Simples.</div>`;
-  if(r.impedido==='Sim')h+=`<div class="banner warn">A empresa está impedida de recolher ICMS/ISS no DAS (sublimite). O programa trata o ICMS/ISS fora do DAS só pela RBT12; confira.</div>`;
-  if(!completo)h+=`<div class="banner warn">Faltam meses de 2025 no extrato. O histórico será preenchido só com a RBT12 e o fator r pode ficar impreciso.</div>`;
-  (r.avisos||[]).forEach(a=>h+=`<div class="banner warn">${esc(a)}</div>`);
-  h+=`<p class="small">Ao aplicar, o histórico de 2025 e as atividades de 2026 e 2027 são preenchidos. A receita anual de cada atividade começa igual à RBT12 distribuída conforme o período lido: é só um ponto de partida, ajuste para a sua projeção. Compras, créditos, despesas, pessoal, ICMS/ISS por atividade e obrigações acessórias não vêm do extrato e ficam em zero. Os dados já digitados são substituídos.</p>
-  <div class="row"><button class="btn" id="pgAplicar" type="button">Aplicar aos dados</button><button class="btn ghost" id="pgDescartar" type="button">Descartar</button></div></div>`;
+  h+=`</div><div class="verdict ${ver.k}"><div class="ic">${ver.ic}</div><div><b>${ver.t}</b><p>${ver.d}</p></div></div>`;
+  if(r.impedido==='Sim')h+=`<div class="banner warn" style="margin-top:12px">A empresa está impedida de recolher ICMS/ISS no DAS (sublimite). O programa trata o ICMS/ISS fora do DAS só pela RBT12; confira.</div>`;
+  if(!completo)h+=`<div class="banner warn" style="margin-top:12px">Faltam meses de 2025 no extrato. O histórico será preenchido só com a RBT12 e o fator r pode ficar impreciso.</div>`;
+  (r.avisos||[]).forEach(a=>h+=`<div class="banner warn" style="margin-top:12px">${esc(a)}</div>`);
+  h+=`<p class="small" style="margin-top:14px;max-width:80ch">Ao aplicar, o histórico de 2025 e as atividades de 2026 e 2027 são preenchidos. A receita anual de cada atividade começa igual à RBT12 distribuída pelo período lido: é só ponto de partida. Compras, créditos, despesas, pessoal, ICMS/ISS por atividade e custos acessórios ficam em zero, e os dados já digitados são substituídos.</p>
+  <div class="actions"><button class="btn" id="pgAplicar" type="button">Aplicar aos dados</button><button class="btn ghost" id="pgDescartar" type="button">Descartar</button></div></div>`;
   o.innerHTML=h;
   o.querySelectorAll('[data-pgt]').forEach(s=>s.onchange=()=>{r.blocos[+s.dataset.pgt].tipo=s.value;pgRender()});
   $('#pgDescartar').onclick=()=>{pgState=null;pgRender()};
@@ -1058,44 +1078,42 @@ function xmlRender(){
   const anos=Object.keys(por).sort(); if(!st.ano||!por[st.ano])st.ano=anos[anos.length-1];
   const Y=por[st.ano];
   if(Y){ui.docs=ui.docs||{};ui.docs.xml={Y,ano:st.ano,c,ign,ndocs:st.docs.length,cnpj:cn}}
-  let h=`<div class="card" style="margin:0"><h3 style="margin-top:0">O que foi lido</h3>
-  <p>${st.docs.length} nota(s) lida(s)${ign.nfse?'; '+ign.nfse+' NFS-e ignorada(s) (ainda não leio serviço)':''}${st.cancel.size?'; '+st.cancel.size+' cancelamento(s) encontrado(s)':''}${ign.outros+ign.invalidos+ign.naoXml?'; '+(ign.outros+ign.invalidos+ign.naoXml)+' arquivo(s) de outro tipo ignorado(s)':''}.</p>
-  <div class="grid"><div><label for="xmlCnpj">CNPJ da empresa (detectado, confira)</label><input id="xmlCnpj" type="text" value="${esc(fmtCnpj(st.cnpj))}"></div>
+  const descart=(c.dup||0)+(c.canc||0)+(c.naoAut||0);
+  let h=`<div class="preview"><h3>Notas lidas</h3><div class="grid" style="margin-bottom:12px"><div><label for="xmlCnpj">CNPJ da empresa (detectado, confira)</label><input id="xmlCnpj" type="text" value="${esc(fmtCnpj(st.cnpj))}"></div>
   <div><label for="xmlAno">Ano a usar</label><select id="xmlAno">${anos.map(a=>`<option ${a===st.ano?'selected':''}>${a}</option>`).join('')}</select></div></div>`;
   if(!Y){o.innerHTML=h+`<div class="banner bad">Nenhuma nota encontrada para esse CNPJ. Confira o número.</div></div>`;wireXml();return}
-  const nm=Y.meses.size, ms=[...Array(12)].map((_,i)=>String(i+1).padStart(2,'0'));
-  const pgm=ui.pgMeses||null;
-  const liq=m=>(Y.rec[m]||0)-(Y.devol[m]||0);
-  h+=`<div class="small">Contadas: ${c.dup} duplicada(s), ${c.canc} cancelada(s), ${c.naoAut} não autorizada(s), ${c.terceiros} de terceiros (não envolvem este CNPJ).</div>
-  <h3>Receita e compras por mês de ${st.ano}</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Receita nas notas (líquida de devoluções)</th>${pgm?'<th>Receita no extrato PGDAS</th><th>Diferença</th>':''}<th>Compras (insumos e revenda)</th></tr></thead><tbody>`;
+  const nm=Y.meses.size,ms=[...Array(12)].map((_,i)=>String(i+1).padStart(2,'0')),pgm=ui.pgMeses||null;
+  const liq=m=>(Y.rec[m]||0)-(Y.devol[m]||0),rec=sum(Object.values(Y.rec)),dev=sum(Object.values(Y.devol));
+  const aliq=Y.eligBase>0?Y.icmsVal/Y.eligBase:0;
+  h+=`<div class="kpis">`+
+    kpi('Notas lidas',String(st.docs.length),descart?descart+' descartada(s): duplicada, cancelada ou não autorizada':'Nenhuma descartada')+
+    kpi('Receita bruta '+st.ano,brl(rec),'Devoluções de '+brl(dev))+
+    kpi('ICMS-ST',rec?pc(Y.st/rec,1):'—','Parcela da receita (substituído)')+
+    kpi('Monofásico',rec?pc(Y.mono/rec,1):'—','Parcela da receita (PIS/COFINS)')+
+    kpi('Exportação',rec?pc(Y.exp/rec,1):'—','Parcela da receita')+
+    kpi('ICMS nas vendas',Y.icmsVal>0?pc(aliq,1):'Não destacado','Alíquota efetiva',Y.icmsVal>0?'':'warn')+
+    `</div><h3>Compras e créditos estimados</h3><div class="kpis">`+
+    kpi('Compras (insumos e revenda)',brl(Y.comprasTot),'Valor da nota')+
+    kpi('ICMS creditável',brl(Y.icmsCred),'Nas entradas')+
+    kpi('Base PIS/COFINS',brl(Y.baseCredPC),'Crédito potencial de '+brl(Y.baseCredPC*.0925)+' no Real')+
+    kpi('Base CBS/IBS',brl(Y.baseCredCBS),'Fornecedores do regime normal')+
+    kpi('Fornecedores do Simples',brl(Y.fornSimples),'Crédito limitado')+
+    kpi('Uso e consumo / ativo',brl(Y.uso)+' / '+brl(Y.ativo),'Uso e consumo vira despesa')+
+    `</div><h3>Receita e compras por mês de ${st.ano}</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Receita nas notas (líquida)</th>${pgm?'<th>Extrato PGDAS</th><th>Diferença</th>':''}<th>Compras</th></tr></thead><tbody>`;
   for(const m of ms){
-    if(!Y.meses.has(m))continue; const v=liq(m), e=pgm?pgm[st.ano+'-'+m]:undefined, d=e===undefined?null:v-e;
+    if(!Y.meses.has(m))continue; const v=liq(m),e=pgm?pgm[st.ano+'-'+m]:undefined,d=e===undefined?null:v-e;
     h+=`<tr><td>${m}/${st.ano}</td><td class="n">${brl2(v)}</td>${pgm?`<td class="n">${e===undefined?'—':brl2(e)}</td><td class="n">${d===null?'—':(Math.abs(d)<=1?'<span class="tag good">confere</span>':'<span class="tag bad">'+brl2(d)+'</span>')}</td>`:''}<td class="n">${brl2(Y.compras[m]||0)}</td></tr>`;
   }
-  const rec=sum(Object.values(Y.rec)),dev=sum(Object.values(Y.devol));
   h+=`</tbody></table></div>`;
-  if(!pgm)h+=`<p class="small">Leia também o extrato do PGDAS-D (cartão acima) para comparar a receita mensal das notas com a declarada.</p>`;
-  const aliq=Y.eligBase>0?Y.icmsVal/Y.eligBase:0;
-  h+=`<h3>Totais de ${st.ano}</h3><div class="scroll"><table><tbody>
-  <tr><td>Receita bruta nas notas de saída</td><td class="n">${brl2(rec)}</td></tr>
-  <tr><td>Devoluções de venda</td><td class="n">${brl2(dev)}</td></tr>
-  <tr><td>Parcela com ICMS-ST (substituído)</td><td class="n">${rec?pc(Y.st/rec):'—'}</td></tr>
-  <tr><td>Parcela monofásica (PIS/COFINS)</td><td class="n">${rec?pc(Y.mono/rec):'—'}</td></tr>
-  <tr><td>Parcela de exportação</td><td class="n">${rec?pc(Y.exp/rec):'—'}</td></tr>
-  <tr><td>Alíquota efetiva de ICMS destacada nas vendas</td><td class="n">${Y.icmsVal>0?pc(aliq):'não destacada nas notas'}</td></tr>
-  <tr><td>Compras de insumos e revenda (valor da nota)</td><td class="n">${brl2(Y.comprasTot)}</td></tr>
-  <tr><td>ICMS creditável nas entradas</td><td class="n">${brl2(Y.icmsCred)}</td></tr>
-  <tr><td>Base de crédito de PIS/COFINS (estimada)</td><td class="n">${brl2(Y.baseCredPC)}</td></tr>
-  <tr><td>Base de crédito de CBS/IBS (fornecedores do regime normal)</td><td class="n">${brl2(Y.baseCredCBS)}</td></tr>
-  <tr><td>Compras de fornecedores do Simples (crédito limitado)</td><td class="n">${brl2(Y.fornSimples)}</td></tr>
-  <tr><td>Uso e consumo</td><td class="n">${brl2(Y.uso)}</td></tr>
-  <tr><td>Ativo imobilizado</td><td class="n">${brl2(Y.ativo)}</td></tr>
-  </tbody></table></div>`;
-  if(Y.icmsVal===0&&Y.eligBase>0)h+=`<div class="banner warn">As notas de saída não destacam ICMS, o que é normal para empresa do Simples. A alíquota de ICMS por atividade precisa ser informada à mão.</div>`;
-  if(nm<12)h+=`<div class="banner warn">As notas cobrem ${nm} de 12 meses de ${st.ano}. <label style="display:inline;color:inherit"><input id="xmlAnual" type="checkbox" ${st.anual?'checked':''}> Projetar o ano pela média dos meses lidos (hipótese: multiplica por ${nm>0?(12/nm).toFixed(2).replace('.',','):'—'})</label></div>`;
-  h+=`<div class="banner warn">Estimativas a conferir: o monofásico depende do CST de PIS informado na nota; a base de crédito de CBS/IBS usa o valor da nota e ainda precisa ser conferida com a LC 214; compras de uso e consumo vão para despesas; ativo imobilizado não é aplicado.</div>
-  <p class="small">Ao aplicar, as atividades, as compras, os créditos e as despesas de 2026 e 2027 são preenchidos com esses valores, como ponto de partida. ${st.ano==='2025'&&nm===12?'Como são 12 meses de 2025, o histórico também é preenchido. ':''}Dados já digitados nesses campos são substituídos; os demais campos são mantidos.</p>
-  <div class="row"><button class="btn" id="xmlAplicar" type="button">Aplicar aos dados</button><button class="btn ghost" id="xmlDescartar" type="button">Descartar</button></div></div>`;
+  if(!pgm)h+=`<p class="small" style="margin-top:8px">Leia também o extrato do PGDAS-D para comparar a receita das notas com a declarada.</p>`;
+  const av=[];
+  if(ign.nfse)av.push(`${ign.nfse} arquivo(s) parecem NFS-e (serviço) e foram ignorados: ainda não leio esse formato.`);
+  if(Y.icmsVal===0&&Y.eligBase>0)av.push('As notas de saída não destacam ICMS, o que é normal para empresa do Simples. A alíquota de ICMS por atividade precisa ser informada à mão.');
+  if(nm<12)av.push(`As notas cobrem ${nm} de 12 meses de ${st.ano}. <label style="display:inline;color:inherit;font-weight:700"><input id="xmlAnual" type="checkbox" ${st.anual?'checked':''}> Projetar o ano pela média dos meses lidos</label> (hipótese: multiplica por ${nm>0?(12/nm).toFixed(2).replace('.',','):'—'}).`);
+  av.push('Valores estimados a partir de CFOP e CST: o monofásico depende do CST de PIS informado e a base de CBS/IBS usa o valor da nota, a conferir com a LC 214.');
+  h+=av.map(a=>`<div class="banner warn" style="margin-top:12px">${a}</div>`).join('');
+  h+=`<p class="small" style="margin-top:14px;max-width:80ch">Ao aplicar, atividades, compras, créditos e despesas de 2026 e 2027 são preenchidos como ponto de partida${st.ano==='2025'&&nm===12?', e o histórico de 2025 também':''}. Os demais campos são mantidos.</p>
+  <div class="actions"><button class="btn" id="xmlAplicar" type="button">Aplicar aos dados</button><button class="btn ghost" id="xmlDescartar" type="button">Descartar</button></div></div>`;
   o.innerHTML=h; wireXml(Y,nm);
 }
 function wireXml(Y,nm){

@@ -658,17 +658,19 @@ function montaSimples(Y,A,P,S,hibrido,cbs,ano){
   const enc=temIV?p.encIV:0;
   if(temIV)memo.push(`Anexo IV: CPP patronal fora do DAS = 20% × (salários + pró-labore) + RAT × salários = ${brl2(enc)}`);
   let extraMemo=[];
+  const pcDas=(imp.PIS||0)+(imp.COFINS||0);
+  if(ano===2027&&!hibrido){delete imp.PIS;delete imp.COFINS;imp.CBS=pcDas;memo.push(`Em 2027 o PIS e a COFINS deixam de existir: a parcela do DAS que era PIS/COFINS (${brl2(pcDas)}) passa a ser CBS dentro do DAS (partilha a confirmar na LC 227/2026).`)}
   if(hibrido){
-    const pcDas=(imp.PIS||0)+(imp.COFINS||0); delete imp.PIS; delete imp.COFINS;
+    delete imp.PIS; delete imp.COFINS;
     const ind=indiretos(Y,A,P,2027,cbs,'real');
     imp.CBS=ind.imp.CBS; imp.IBS=ind.imp.IBS;
-    memo.push(`Híbrido: retira do DAS a parcela PIS/COFINS (=CBS na partilha de 2027) de ${brl2(pcDas)} e recolhe CBS/IBS pelo regime regular (não cumulativo).`);
+    memo.push(`Híbrido: retira do DAS a parcela de CBS (${brl2(pcDas)}, que até 2026 era PIS/COFINS) e recolhe CBS/IBS pelo regime regular (não cumulativo).`);
     memo.push(...ind.memo.filter(l=>/^(CBS|IBS|Base da)/.test(l)));
   }
   const nome=hibrido?'hibrido':'simples';
-  const ln=[],ordem=['IRPJ','CSLL','COFINS','PIS','CPP','ICMS','IPI','ISS'],lab={IRPJ:'IRPJ (no DAS)',CSLL:'CSLL (no DAS)',COFINS:'COFINS (no DAS)',PIS:'PIS (no DAS)',CPP:'INSS patronal, CPP (no DAS)',ICMS:'ICMS (no DAS)',IPI:'IPI (no DAS)',ISS:'ISS (no DAS)'};
-  const dasT=sum(ordem.map(k=>imp[k]||0));
-  ordem.forEach(k=>{if(imp[k]>0)ln.push({t:lab[k],base:A.rec,al:pc(imp[k]/A.rec),calc:`Parcela de ${pc(imp[k]/dasT,1)} do DAS (partilha do Anexo × alíquota efetiva)`,v:imp[k],ref:'LC 123/2006, Anexos',f:'Parcela do DAS = receita × alíquota efetiva × % de partilha deste tributo',parts:[['Receita bruta',A.rec],['Participação deste tributo no DAS',imp[k]/dasT,'pct'],['DAS total do ano',dasT],['Parcela deste tributo',imp[k]]]})});
+  const ln=[],ordem=['IRPJ','CSLL','COFINS','PIS','CBS','CPP','ICMS','IPI','ISS'],lab={IRPJ:'IRPJ (no DAS)',CSLL:'CSLL (no DAS)',COFINS:'COFINS (no DAS)',PIS:'PIS (no DAS)',CBS:'CBS (no DAS)',CPP:'INSS patronal, CPP (no DAS)',ICMS:'ICMS (no DAS)',IPI:'IPI (no DAS)',ISS:'ISS (no DAS)'};
+  const dasT=sum(ordem.filter(k=>!(hibrido&&k==='CBS')).map(k=>imp[k]||0));
+  ordem.forEach(k=>{if(imp[k]>0&&!(hibrido&&k==='CBS'))ln.push({t:lab[k],base:A.rec,al:pc(imp[k]/A.rec),calc:k==='CBS'?`Parcela de ${pc(imp[k]/dasT,1)} do DAS: o que até 2026 era PIS e COFINS passa a ser CBS`:`Parcela de ${pc(imp[k]/dasT,1)} do DAS (partilha do Anexo × alíquota efetiva)`,v:imp[k],ref:k==='CBS'?'LC 123/2006, Anexos; partilha da CBS em 2027 a confirmar (LC 227/2026)':'LC 123/2006, Anexos',f:'Parcela do DAS = receita × alíquota efetiva × % de partilha deste tributo',parts:[['Receita bruta',A.rec],['Participação deste tributo no DAS',imp[k]/dasT,'pct'],['DAS total do ano',dasT],['Parcela deste tributo',imp[k]]]})});
   if(imp.ICMS_fora_DAS>0)ln.push({t:'ICMS (fora do DAS)',base:S.recMercFora,al:S.recMercFora>0?pc(S.icmsForaDeb/S.recMercFora):'—',calc:'RBT12 acima do sublimite de R$ 3,6 mi: ICMS pelo regime normal, menos créditos proporcionais',v:imp.ICMS_fora_DAS,ref:'LC 123/2006, arts. 19 e 20'});
   if(imp.ISS_fora_DAS>0)ln.push({t:'ISS (fora do DAS)',base:null,al:'—',calc:'RBT12 acima do sublimite: ISS recolhido ao município',v:imp.ISS_fora_DAS,ref:'LC 123/2006, arts. 19 e 20'});
   if(hibrido){const ind2=indiretos(Y,A,P,2027,cbs,'real');ind2.ln.filter(l=>l.t==='CBS'||l.t==='IBS').forEach(l=>ln.push(Object.assign({},l,{t:l.t+' (regime regular)'})))}
@@ -838,13 +840,14 @@ function credCli(r,ano){
   if(ano!==2027||!r.simples||!r.hibrido)return null;
   const Y=N.anos[2027]; const cb=N.P.cbs[ui.cen];
   let simples=0,reg=0;
-  const pcDas=(r.simples.imp.PIS||0)+(r.simples.imp.COFINS||0);
+  const pcDas=(r.simples.imp.CBS||0)+(r.simples.imp.PIS||0)+(r.simples.imp.COFINS||0);
   const tot=r.A.rec;
   for(const x of Y.ativ){const rv=sum(x.m); const sh=rv/tot; simples+=pcDas*sh*x.pctB2B; reg+=rv*(1-x.pctExp)*(1-x.red)*cb*x.pctB2B}
   return {simples,reg};
 }
 /* ---------- Painel ---------- */
 const CAT=[['lucro','IRPJ e CSLL','--c1'],['pcc','PIS/COFINS ou CBS/IBS','--c2'],['icms','ICMS','--c3'],['iss','ISS','--c4'],['cpp','CPP e encargos','--c5'],['outros','IPI e outros','--c6']];
+const catNome=ano=>({lucro:'IRPJ e CSLL',pcc:ano===2027?'CBS e IBS':'PIS e COFINS',icms:'ICMS',iss:'ISS',cpp:'INSS patronal e encargos',outros:'IPI e outros'});
 const REGC={simples:'Simples',hibrido:'Híbrido',presumido:'Presumido',real:'Real'};
 function catImpostos(x){
   const c={lucro:0,pcc:0,icms:0,iss:0,cpp:0,outros:0};
@@ -855,15 +858,15 @@ function catImpostos(x){
   }
   c.cpp+=x.enc; return c;
 }
-function stkRegimes(r,ids){
+function stkRegimes(r,ano){
   const ks=['simples','hibrido','presumido','real'].filter(k=>r[k]); if(!ks.length)return '';
   const mx=Math.max(...ks.map(k=>r[k].cargaPct),0.0001);
   let h='<div class="stks">';
   for(const k of ks){
     const x=r[k],c=catImpostos(x),tot=sum(Object.values(c))||1;
-    h+=`<div class="stk"><span class="n">${REGC[k]}</span><span class="sb" style="width:${Math.max(4,x.cargaPct/mx*100)}%">${CAT.map(([id,l,v])=>c[id]>0?`<i style="width:${c[id]/tot*100}%;background:var(${v})" title="${l}: ${brl(c[id])}"></i>`:'').join('')}</span><span class="v">${pc(x.cargaPct,1)}</span></div>`;
+    h+=`<div class="stk"><span class="n">${REGC[k]}</span><span class="sb" style="width:${Math.max(4,x.cargaPct/mx*100)}%">${CAT.map(([id,l,v])=>c[id]>0?`<i style="width:${c[id]/tot*100}%;background:var(${v})" title="${catNome(ano)[id]}: ${brl(c[id])}"></i>`:'').join('')}</span><span class="v">${pc(x.cargaPct,1)}</span></div>`;
   }
-  return h+'</div><div class="legend">'+CAT.map(([id,l,v])=>`<span><i style="background:var(${v})"></i>${l}</span>`).join('')+'</div>';
+  return h+'</div><div class="legend">'+CAT.map(([id,l,v])=>`<span><i style="background:var(${v})"></i>${catNome(ano)[id]}</span>`).join('')+'</div>';
 }
 function barsRegimes(r){
   const rk=ranking(r),mx=Math.max(...rk.map(x=>x.liq),1);
@@ -938,7 +941,7 @@ function renderRes(){
   const cf=confianca(),{crit}=faltasDados(N),dc=docsContagem(),nDocs=Object.values(dc).filter(Boolean).length;
   const ganho=sim27&&w27.nome!=='simples'?w27.liq-sim27.liq:(s27?w27.liq-s27.liq:0),rot=sim27&&w27.nome!=='simples'?'a mais por ano que no Simples comum':'a mais por ano que o 2º colocado';
   const chipC={ok:'ok',warn:'warn',bad:'bad'}[cf.k];
-  const REGD={simples:'Uma guia única (DAS) com quase todos os tributos.',hibrido:'Continua no Simples, mas paga CBS/IBS como as demais empresas e passa crédito integral aos clientes.',presumido:'IRPJ e CSLL sobre uma margem presumida; PIS/COFINS (CBS em 2027) e INSS patronal por fora.',real:'IRPJ e CSLL sobre o lucro real, com créditos de PIS/COFINS/CBS e mais obrigações.'};
+  const a27=ui.anoCmp===2027,REGD={simples:'Uma guia única (DAS) com quase todos os tributos.',hibrido:'Continua no Simples, mas paga CBS/IBS como as demais empresas e passa crédito integral aos clientes.',presumido:a27?'IRPJ e CSLL sobre uma margem presumida; CBS e IBS com créditos; INSS patronal por fora.':'IRPJ e CSLL sobre uma margem presumida; PIS e COFINS cumulativos e INSS patronal por fora.',real:a27?'IRPJ e CSLL sobre o lucro real, com créditos de CBS e IBS e mais obrigações.':'IRPJ e CSLL sobre o lucro real, com créditos de PIS/COFINS e mais obrigações.'};
   const confT=cf.k==='bad'?'Ainda não dá para dizer':cf.k==='ok'?'Alta confiança':'Confiança média';
   const confD=cf.k==='bad'?'Faltam dados que se aplicam à sua empresa.':cf.k==='ok'?'O mesmo regime vence em todos os cenários testados.':(cf.igual?'A diferença é pequena e pode mudar com receita ou custos.':'Depende da alíquota da CBS, que o Senado ainda vai fixar.');
   const passos=[{t:'Anexar documentos',ok:nDocs>0,s:nDocs+' de 5'},{t:'Completar os dados',ok:!crit.length,s:crit.length?crit.length+' pendência(s)':'Completo'},{t:'Ver a resposta',ok:!crit.length,s:crit.length?'Aguardando':'Pronta'}];
@@ -958,7 +961,7 @@ function renderRes(){
   const faz=`<div class="card"><div class="cardh"><div><h3>O que fazer agora</h3><p class="small">Passos sugeridos, na ordem.</p></div></div><ol class="todo">${pas.filter(p=>!p.startsWith('· ')).map(p=>'<li>'+esc(p)+'</li>').join('')}</ol>${pas.some(p=>p.startsWith('· '))?'<ul class="tight small" style="margin-top:10px">'+pas.filter(p=>p.startsWith('· ')).map(p=>'<li>'+esc(p.slice(2))+'</li>').join('')+'</ul>':''}<p class="small" style="margin-top:12px">Prazos legais e datas estão em “Prazos e marcos”, mais abaixo.</p></div>`;
   /* por que */
   const pq=[];
-  if(s27){const cw=catImpostos(w27),cs=catImpostos(s27),lab={lucro:'IRPJ e CSLL',pcc:'PIS/COFINS ou CBS/IBS',icms:'ICMS',iss:'ISS',cpp:'INSS patronal e encargos',outros:'IPI e outros'};
+  if(s27){const cw=catImpostos(w27),cs=catImpostos(s27),lab=catNome(2027);
     pq.push(`${REG[w27.nome]} paga <b>${brl(w27.carga)}</b> de tributos e encargos (${pc(w27.cargaPct,1)} da receita), contra <b>${brl(s27.carga)}</b> (${pc(s27.cargaPct,1)}) de ${REG[s27.nome]}.`);
     Object.keys(cw).map(k=>[k,cs[k]-cw[k]]).filter(([,d])=>Math.abs(d)>1).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,2).forEach(([k,d])=>pq.push(`${lab[k]}: ${REG[w27.nome]} paga ${brl(cw[k])} e ${REG[s27.nome]} paga ${brl(cs[k])}.`));
     if(w27.acess!==s27.acess)pq.push(`Obrigações acessórias (informadas): ${brl(w27.acess)} por ano contra ${brl(s27.acess)}.`);
@@ -970,7 +973,7 @@ function renderRes(){
   h+=`<h2 style="margin-top:34px">Análise detalhada</h2><p class="sub" style="margin-bottom:16px">Gráficos, limites do Simples, prazos e tabelas completas para quem quer conferir os números.</p>`;
   h+=`<div class="dgrid">`;
   h+=`<div class="card"><div class="cardh"><div><h3>Resultado líquido por regime</h3><p class="small">Receita menos custos, folha e tributos, antes do IRPF dos sócios.</p></div></div>${chartResultado()}</div>`;
-  h+=`<div class="card"><div class="cardh"><div><h3>Composição da carga tributária</h3><p class="small">Tributos e encargos patronais como % da receita.</p></div><div class="seg" id="segComp" style="margin:0">${[2026,2027].map(a=>`<button data-a="${a}" aria-pressed="${a===ui.anoComp}">${a}</button>`).join('')}</div></div>${stkRegimes(ui.anoComp===2026?r26:r27)}</div>`;
+  h+=`<div class="card"><div class="cardh"><div><h3>Composição da carga tributária</h3><p class="small">Tributos e encargos patronais como % da receita.</p></div><div class="seg" id="segComp" style="margin:0">${[2026,2027].map(a=>`<button data-a="${a}" aria-pressed="${a===ui.anoComp}">${a}</button>`).join('')}</div></div>${stkRegimes(ui.anoComp===2026?r26:r27,ui.anoComp)}</div>`;
   const gr=(ano,r)=>gauge('RBT12 máximo em '+ano,r.S.rbtMax,brl(r.S.rbtMax),[[SUB,'3,6 mi'],[LIM,'4,8 mi']],LIM*1.15,r.S.rbtMax>LIM?'bad':r.S.rbtMax>SUB?'warn':'good');
   const fr=r=>r.S.frMin!==null?gauge('Fator r',r.S.frMax,pc(r.S.frMin)+' a '+pc(r.S.frMax),[[.28,'28%']],.5,r.S.frMax>=.28?'good':'warn'):'';
   h+=`<div class="card"><div class="cardh"><div><h3>Limites do Simples</h3><p class="small">Distância até o sublimite de ICMS/ISS e o limite de enquadramento.</p></div></div>${gr(2026,r26)}${gr(2027,r27)}${fr(r27)}${chartRbt()}<div class="legend"><span><i style="background:var(--accent)"></i>RBT12 mês a mês (jan/2026 a dez/2027)</span></div></div>`;
@@ -1023,15 +1026,15 @@ function tabelaLinhas(x,rec){
   h+=`<tr class="tot"><td colspan="4" style="text-align:left">Total de tributos e encargos</td><td class="n">${brl(tot)}</td><td class="n">${pc(x.cargaPct,2)}</td></tr></tbody></table></div>`;
   return h;
 }
-function extrasRegime(x,rec){
+function extrasRegime(x,rec,ano){
   let h='';
   if(x.enq&&x.enq.length)h+=`<h4 class="sub4">Enquadramento no Simples (última competência do ano)</h4><div class="scroll"><table><thead><tr><th>Atividade</th><th>Anexo / faixa</th><th>Alíquota nominal</th><th>Parcela a deduzir</th><th>Alíquota efetiva</th><th>Efetiva média do ano</th></tr></thead><tbody>${x.enq.map(e=>`<tr><td>${esc(e.nome)}</td><td>${e.an} / ${e.faixa}ª</td><td class="n">${pc(e.al,1)}</td><td class="n">${brl(e.pd)}</td><td class="n">${pc(e.erUlt)}</td><td class="n">${pc(e.erMed)}</td></tr>`).join('')}</tbody></table></div><p class="small">Alíquota efetiva = (RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12 (LC 123/2006, art. 18, §1º). A efetiva média é o DAS da atividade dividido pela receita dela.</p>`;
   if(x.pres)h+=`<h4 class="sub4">Base de cálculo presumida</h4><div class="scroll"><table><thead><tr><th>Atividade</th><th>Receita</th><th>Presunção IRPJ</th><th>Base IRPJ</th><th>Presunção CSLL</th><th>Base CSLL</th></tr></thead><tbody>${x.pres.map(e=>`<tr><td>${esc(e.nome)}</td><td class="n">${brl(e.rec)}</td><td class="n">${pc(e.pi,0)}</td><td class="n">${brl(e.bi)}</td><td class="n">${pc(e.pcs,0)}</td><td class="n">${brl(e.bc)}</td></tr>`).join('')}</tbody></table></div><p class="small">No Presumido o imposto incide sobre uma margem presumida da receita, não sobre o lucro real (Lei 9.249/1995, arts. 15 e 20).</p>`;
-  if(x.lrDet){const d=x.lrDet;h+=`<h4 class="sub4">Do faturamento ao lucro tributável</h4><div class="scroll"><table><tbody><tr><td>Receita bruta</td><td class="n">${brl(d.rec)}</td></tr><tr><td>(−) Tributos indiretos líquidos (ICMS, ISS, PIS/COFINS ou CBS/IBS, IPI)</td><td class="n">${brl(d.indSum)}</td></tr><tr><td>(−) Compras</td><td class="n">${brl(d.compras)}</td></tr><tr><td>(−) Despesas operacionais</td><td class="n">${brl(d.despesas)}</td></tr><tr><td>(−) Pessoal (salários, pró-labore, FGTS)</td><td class="n">${brl(d.pes)}</td></tr><tr><td>(−) Encargos patronais</td><td class="n">${brl(d.encReg)}</td></tr><tr><td>(+) Adições menos exclusões</td><td class="n">${brl(d.adicoes)}</td></tr>${d.ttdExc>0?`<tr><td>(−) Benefício do TTD excluído da base (subvenção para investimento)</td><td class="n">${brl(d.ttdExc)}</td></tr>`:''}<tr class="tot"><td>Lucro antes do IRPJ</td><td class="n">${brl(d.lr)}</td></tr><tr><td>(−) Prejuízo fiscal compensado (limite de 30%)</td><td class="n">${brl(d.comp)}</td></tr><tr class="tot"><td>Base do IRPJ e da CSLL</td><td class="n">${brl(d.base)}</td></tr></tbody></table></div>`}
+  if(x.lrDet){const d=x.lrDet;h+=`<h4 class="sub4">Do faturamento ao lucro tributável</h4><div class="scroll"><table><tbody><tr><td>Receita bruta</td><td class="n">${brl(d.rec)}</td></tr><tr><td>(−) Tributos indiretos líquidos (ICMS, ISS, ${ano===2027?'CBS/IBS':'PIS/COFINS'}, IPI)</td><td class="n">${brl(d.indSum)}</td></tr><tr><td>(−) Compras</td><td class="n">${brl(d.compras)}</td></tr><tr><td>(−) Despesas operacionais</td><td class="n">${brl(d.despesas)}</td></tr><tr><td>(−) Pessoal (salários, pró-labore, FGTS)</td><td class="n">${brl(d.pes)}</td></tr><tr><td>(−) Encargos patronais</td><td class="n">${brl(d.encReg)}</td></tr><tr><td>(+) Adições menos exclusões</td><td class="n">${brl(d.adicoes)}</td></tr>${d.ttdExc>0?`<tr><td>(−) Benefício do TTD excluído da base (subvenção para investimento)</td><td class="n">${brl(d.ttdExc)}</td></tr>`:''}<tr class="tot"><td>Lucro antes do IRPJ</td><td class="n">${brl(d.lr)}</td></tr><tr><td>(−) Prejuízo fiscal compensado (limite de 30%)</td><td class="n">${brl(d.comp)}</td></tr><tr class="tot"><td>Base do IRPJ e da CSLL</td><td class="n">${brl(d.base)}</td></tr></tbody></table></div>`}
   return h;
 }
-function explicaCarga(r){
-  const ks=['simples','hibrido','presumido','real'].filter(k=>r[k]),lab={lucro:'IRPJ e CSLL',pcc:'PIS/COFINS ou CBS/IBS',icms:'ICMS',iss:'ISS',cpp:'INSS patronal e encargos',outros:'IPI e outros'};
+function explicaCarga(r,ano){
+  const ks=['simples','hibrido','presumido','real'].filter(k=>r[k]),lab=catNome(ano);
   return ks.map(k=>{const x=r[k],c=catImpostos(x),top=Object.entries(c).filter(([,v])=>v>1).sort((a,b)=>b[1]-a[1]).slice(0,2);
     return `<b>${REG[x.nome]}</b> paga ${pc(x.cargaPct,1)} da receita (${brl(x.carga)}). Pesam mais: ${top.map(([id,v])=>lab[id]+' ('+brl(v)+')').join(' e ')}.`});
 }
@@ -1042,10 +1045,10 @@ function renderImp(){
   let h=`<h2>Impostos e alíquotas, regime a regime</h2><p class="sub" style="margin-bottom:14px">Aqui está a conta por trás da carga tributária de cada regime: quais tributos incidem, sobre qual base, com qual alíquota e quanto dá.</p>`;
   h+=`<div class="row" style="margin-bottom:6px"><div class="seg" id="segImpAno">${[2026,2027].map(a=>`<button data-a="${a}" aria-pressed="${a===ano}">${a}</button>`).join('')}</div>${ano===2027?`<div class="seg" id="segImpCen">${cenKs.map(k=>`<button data-c="${k}" aria-pressed="${k===ui.cen}">CBS ${pc4(N.P.cbs[k])}</button>`).join('')}</div>`:''}</div>`;
   h+=`<div class="card"><div class="cardh"><div><h3>Quadro comparativo</h3><p class="small">Cada célula mostra o valor do tributo e, embaixo, quanto ele pesa na receita. Esse percentual não é a alíquota do tributo.</p></div></div>${matrizImpostos(r)}</div>`;
-  h+=`<div class="card"><div class="cardh"><div><h3>Por que a carga é diferente</h3><p class="small">O que mais pesa em cada regime.</p></div></div><ul class="tight">${explicaCarga(r).map(t=>'<li>'+t+'</li>').join('')}</ul><p class="small">Em geral: o Simples tem uma alíquota efetiva única que cresce com a faixa de receita; o Presumido paga IRPJ e CSLL sobre uma margem presumida e o INSS patronal por fora; o Real paga sobre o lucro de verdade e aproveita créditos. Qual sai mais barato depende da margem, da folha e dos créditos da empresa.</p></div>`;
+  h+=`<div class="card"><div class="cardh"><div><h3>Por que a carga é diferente</h3><p class="small">O que mais pesa em cada regime.</p></div></div><ul class="tight">${explicaCarga(r,ano).map(t=>'<li>'+t+'</li>').join('')}</ul><p class="small">Em geral: o Simples tem uma alíquota efetiva única que cresce com a faixa de receita; o Presumido paga IRPJ e CSLL sobre uma margem presumida e o INSS patronal por fora; o Real paga sobre o lucro de verdade e aproveita créditos. Qual sai mais barato depende da margem, da folha e dos créditos da empresa.</p></div>`;
   h+=`<h3 style="margin-top:22px">Cálculo imposto por imposto</h3>`;
   for(const k of ks){const x=r[k];
-    h+=`<details class="card tbl" ${k==='simples'||x===win?'open':''}><summary><span><b>${REG[k]}</b> <span class="small">· ${brl(x.carga)} de tributos e encargos (${pc(x.cargaPct,1)})${x===win?' · maior resultado':''}</span></span></summary><div>${tabelaLinhas(x,r.A.rec)}${extrasRegime(x,r.A.rec)}</div></details>`;
+    h+=`<details class="card tbl" ${k==='simples'||x===win?'open':''}><summary><span><b>${REG[k]}</b> <span class="small">· ${brl(x.carga)} de tributos e encargos (${pc(x.cargaPct,1)})${x===win?' · maior resultado':''}</span></span></summary><div>${tabelaLinhas(x,r.A.rec)}${extrasRegime(x,r.A.rec,ano)}</div></details>`;
   }
   h+=`<p class="small">Alíquotas e bases seguem as normas indicadas em cada linha; pontos ainda pendentes (por exemplo, a alíquota da CBS em 2027) estão na aba “Riscos e base legal”. Fórmulas completas, com os números usados, estão em “Memória de cálculo”.</p>`;
   o.innerHTML=h;
@@ -1132,7 +1135,7 @@ function renderMemo(){
   h+=`<div class="kpis" style="margin:10px 0 16px">${kpi('Receita bruta',brl(rec),'Base de todos os cálculos')}${kpi('Tributos e encargos',brl(x.carga),pc(x.cargaPct,2)+' da receita')}${kpi('Sobra por ano',brl(x.liq),pc(x.liq/rec,1)+' da receita',x.liq<0?'bad':'good')}</div>`;
   h+=`<div class="card"><div class="cardh"><div><h3>Para onde vai a receita</h3><p class="small">Como cada R$ 100 faturados se dividem em ${REG[k]}.</p></div></div>${fluxoReceita(x,Y)}</div>`;
   h+=`<h3 style="margin-top:22px">Tributo por tributo</h3><div class="calc">${(x.linhas||[]).map(l=>cardCalc(l,rec)).join('')}</div>`;
-  const ex=extrasRegime(x,rec); if(ex)h+=`<div class="card" style="margin-top:14px">${ex}</div>`;
+  const ex=extrasRegime(x,rec,ano); if(ex)h+=`<div class="card" style="margin-top:14px">${ex}</div>`;
   if(k==='simples'||k==='hibrido')h+=`<details class="card tbl" style="margin-top:14px"><summary><span><b>DAS mês a mês</b> <span class="small">· alíquota efetiva e valor de cada competência</span></span></summary><div>${memoSimples(r,ano)}</div></details>`;
   h+=`<h3 style="margin-top:22px">Do faturamento ao resultado</h3><div class="card"><table class="wf"><tbody>
     <tr><td>Receita bruta</td><td>${brl2(rec)}</td></tr>
@@ -1589,7 +1592,7 @@ function xmlRender(){
     `</div><h3>Compras, serviços tomados e fretes</h3><div class="kpis">`+
     kpi('Compras (insumos e revenda)',brl(Y.comprasTot),'Valor da nota')+
     kpi('ICMS creditável',brl(Y.icmsCred+Y.freteIcms),Y.freteIcms?'Inclui '+brl(Y.freteIcms)+' de fretes':'Nas entradas')+
-    kpi('Base PIS/COFINS',brl(Y.baseCredPC+Y.servTom+Y.frete-Y.freteIcms),'Crédito potencial de '+brl((Y.baseCredPC+Y.servTom+Y.frete-Y.freteIcms)*.0925)+' no Real')+
+    kpi('Base PIS/COFINS (até 2026)',brl(Y.baseCredPC+Y.servTom+Y.frete-Y.freteIcms),'Crédito potencial de '+brl((Y.baseCredPC+Y.servTom+Y.frete-Y.freteIcms)*.0925)+' no Real')+
     kpi('Base CBS/IBS',brl(Y.baseCredCBS+Y.servTom-Y.servTomSimples+Y.frete-Y.freteSimples),'Fornecedores do regime normal')+
     kpi('Serviços tomados',brl(Y.servTom),Y.nTom?Y.nTom+' NFS-e':'Nenhuma NFS-e de tomados')+
     kpi('Fretes (CT-e)',brl(Y.frete),Y.nFrete?Y.nFrete+' CT-e':'Nenhum CT-e')+
@@ -1742,7 +1745,7 @@ function montarRelatorio(){
   const gx=(ano,r)=>gauge('RBT12 máximo em '+ano,r.S.rbtMax,brl(r.S.rbtMax),[[SUB,'3,6 mi'],[LIM,'4,8 mi']],LIM*1.15,r.S.rbtMax>LIM?'bad':r.S.rbtMax>SUB?'warn':'good');
   h+=`<div class="pbreak"></div><h2 class="ph">Painel executivo</h2><div class="rgrid">
    <div class="rcard wide"><h4>Resultado líquido por regime</h4>${chartResultado('base')}</div>
-   <div class="rcard"><h4>Composição da carga em 2027 (% da receita)</h4>${stkRegimes(r27)}</div>
+   <div class="rcard"><h4>Composição da carga em 2027 (% da receita)</h4>${stkRegimes(r27,2027)}</div>
    <div class="rcard"><h4>Limites do Simples</h4>${gx(2026,r26)}${gx(2027,r27)}${r27.S.frMin!==null?gauge('Fator r',r27.S.frMax,pc(r27.S.frMin)+' a '+pc(r27.S.frMax),[[.28,'28%']],.5,r27.S.frMax>=.28?'good':'warn'):''}</div>
    <div class="rcard wide rbtcard"><h4>RBT12 mês a mês</h4>${chartRbt()}</div>
    <div class="rcard wide"><h4>Firmeza da conclusão</h4>${cf.ws?`<div class="tests">${cf.ks.map((k,i)=>`<div class="test ${cf.ws[i]===cf.base?'ok':'diff'}"><span>CBS ${pc4(N.P.cbs[k])}</span><b>${REGC[cf.ws[i]]}</b></div>`).join('')}${cf.est.map(([l,n])=>`<div class="test ${n===cf.base?'ok':'diff'}"><span>${l}</span><b>${REGC[n]}</b></div>`).join('')}</div>`:'<p class="small">Complete os dados para ver os testes de estabilidade.</p>'}</div>
@@ -1751,7 +1754,7 @@ function montarRelatorio(){
   /* documentos */
   h+=sec('Documentos considerados');
   {const dc=docsContagem(),nomes={pgdas:'Extrato do PGDAS-D',saida:'Notas de saída e serviços prestados',entrada:'Notas de entrada',tomados:'Notas de serviços tomados',cte:'CT-e (frete)'},
-   efeito={pgdas:'sem o extrato não há conferência da receita declarada nem do DAS',saida:'sem notas de saída não é possível estimar as segregações (ST, monofásico, exportação) nem a receita por atividade',entrada:'sem notas de entrada, compras e créditos de ICMS, PIS/COFINS e CBS ficam por informar',tomados:'sem serviços tomados, as despesas e os créditos sobre serviços ficam por informar, o que pesa no Lucro Real',cte:'sem CT-e, os fretes e seus créditos não entram na análise'};
+   efeito={pgdas:'sem o extrato não há conferência da receita declarada nem do DAS',saida:'sem notas de saída não é possível estimar as segregações (ST, monofásico, exportação) nem a receita por atividade',entrada:'sem notas de entrada, compras e créditos de ICMS, PIS/COFINS (até 2026) e CBS ficam por informar',tomados:'sem serviços tomados, as despesas e os créditos sobre serviços ficam por informar, o que pesa no Lucro Real',cte:'sem CT-e, os fretes e seus créditos não entram na análise'};
    h+=`<div class="scroll"><table><thead><tr><th>Documento</th><th>Situação</th></tr></thead><tbody>${Object.keys(nomes).map(k=>`<tr><td>${nomes[k]}</td><td class="n">${k==='pgdas'?(dc[k]?'Anexado':'Não anexado'):(dc[k]?dc[k]+' documento(s)':'Não anexado')}</td></tr>`).join('')}</tbody></table></div>`+`<div class="scroll" style="margin-top:8px"><table><tbody><tr><td>TTD de Santa Catarina</td><td class="n">${(S.ttd&&S.ttd.possui==='sim'&&N.P.ttd.length)?N.P.ttd.map(t=>t.cod).join(', ')+' (considerado no Presumido e no Real)':S.ttd&&S.ttd.possui==='nao'?'Não possui':'Não informado'}</td></tr></tbody></table></div>`;
    const falta=Object.keys(nomes).filter(k=>!dc[k]);
    h+=falta.length?parecer('atencao',`Não foram anexados: ${falta.map(k=>nomes[k]).join('; ')}. Consequências: ${falta.map(k=>efeito[k]).join('; ')}.`):parecer('ok','Todos os documentos do checklist foram anexados.');}
@@ -1815,8 +1818,8 @@ function montarRelatorio(){
   /* 4 compras */
   h+=sec('Compras e créditos');
   if(xm){const Y=xm.Y,rec=sum(Object.values(Y.rec))||1;
-    h+=`<div class="kpis">${kpi('Compras de insumos',brl(Y.comprasTot),pc(Y.comprasTot/rec,1)+' da receita bruta')}${kpi('ICMS creditável',brl(Y.icmsCred+Y.freteIcms),'nas entradas e fretes')}${kpi('Crédito potencial PIS/COFINS',brl((Y.baseCredPC+Y.servTom+Y.frete-Y.freteIcms)*.0925),'9,25% no Lucro Real')}${kpi('Serviços tomados e fretes',brl(Y.servTom+Y.frete),(Y.nTom+Y.nFrete)+' documento(s)')}</div>`;
-    h+=`<div class="scroll"><table><tbody><tr><td>Compras de insumos e revenda (valor da nota)</td><td class="n">${brl2(Y.comprasTot)} (${pc(Y.comprasTot/rec,1)} da receita bruta)</td></tr><tr><td>ICMS creditável nas entradas</td><td class="n">${brl2(Y.icmsCred)}</td></tr><tr><td>Base estimada de crédito de PIS/COFINS</td><td class="n">${brl2(Y.baseCredPC)} (crédito potencial de 9,25% no Lucro Real: ${brl2(Y.baseCredPC*.0925)})</td></tr><tr><td>Base de crédito de CBS/IBS (fornecedores do regime normal)</td><td class="n">${brl2(Y.baseCredCBS)}</td></tr><tr><td>Compras de fornecedores do Simples</td><td class="n">${brl2(Y.fornSimples)}</td></tr><tr><td>Uso e consumo / ativo imobilizado</td><td class="n">${brl2(Y.uso)} / ${brl2(Y.ativo)}</td></tr><tr><td>Serviços tomados (NFS-e)</td><td class="n">${brl2(Y.servTom)}${Y.servTomSimples?' (de optantes do Simples: '+brl2(Y.servTomSimples)+')':''}</td></tr><tr><td>Fretes (CT-e)</td><td class="n">${brl2(Y.frete)} (ICMS creditável: ${brl2(Y.freteIcms)})</td></tr></tbody></table></div>`;
+    h+=`<div class="kpis">${kpi('Compras de insumos',brl(Y.comprasTot),pc(Y.comprasTot/rec,1)+' da receita bruta')}${kpi('ICMS creditável',brl(Y.icmsCred+Y.freteIcms),'nas entradas e fretes')}${kpi('Crédito potencial de PIS/COFINS (até 2026)',brl((Y.baseCredPC+Y.servTom+Y.frete-Y.freteIcms)*.0925),'9,25% no Lucro Real')}${kpi('Serviços tomados e fretes',brl(Y.servTom+Y.frete),(Y.nTom+Y.nFrete)+' documento(s)')}</div>`;
+    h+=`<div class="scroll"><table><tbody><tr><td>Compras de insumos e revenda (valor da nota)</td><td class="n">${brl2(Y.comprasTot)} (${pc(Y.comprasTot/rec,1)} da receita bruta)</td></tr><tr><td>ICMS creditável nas entradas</td><td class="n">${brl2(Y.icmsCred)}</td></tr><tr><td>Base estimada de crédito de PIS/COFINS (vale até 2026)</td><td class="n">${brl2(Y.baseCredPC)} (crédito potencial de 9,25% no Lucro Real: ${brl2(Y.baseCredPC*.0925)})</td></tr><tr><td>Base de crédito de CBS/IBS (fornecedores do regime normal)</td><td class="n">${brl2(Y.baseCredCBS)}</td></tr><tr><td>Compras de fornecedores do Simples</td><td class="n">${brl2(Y.fornSimples)}</td></tr><tr><td>Uso e consumo / ativo imobilizado</td><td class="n">${brl2(Y.uso)} / ${brl2(Y.ativo)}</td></tr><tr><td>Serviços tomados (NFS-e)</td><td class="n">${brl2(Y.servTom)}${Y.servTomSimples?' (de optantes do Simples: '+brl2(Y.servTomSimples)+')':''}</td></tr><tr><td>Fretes (CT-e)</td><td class="n">${brl2(Y.frete)} (ICMS creditável: ${brl2(Y.freteIcms)})</td></tr></tbody></table></div>`;
     const tc=Y.comprasTot+Y.fornSimples>0?Y.fornSimples/(Y.comprasTot+Y.uso):0;
     h+=parecer('atencao',`O Simples não gera crédito de ICMS nem de PIS/COFINS ao próprio contribuinte; os regimes Presumido e Real geram, e a CBS gera crédito em 2027. ${Y.fornSimples>0?`Compras de fornecedores do Simples (${brl2(Y.fornSimples)}) geram crédito limitado de CBS ao comprador, por isso ficaram fora da base.`:''} Os valores acima são estimativas feitas a partir de CFOP e CST das notas e devem ser conferidas por amostragem.`);
   }else h+=`<p>Sem XMLs de entrada. Informe compras e créditos manualmente ou envie as notas.</p>`;
@@ -1833,8 +1836,8 @@ function montarRelatorio(){
   h+=parecer(dif<.01?'atencao':'ok',`A diferença entre o primeiro e o segundo colocado em 2027 é de ${pc(dif)} da receita. ${dif<.01?'É uma diferença pequena: custos de transição, erros de estimativa ou mudanças de alíquota podem inverter a ordem.':'É uma diferença relevante, mas confirme as premissas antes de decidir.'}`);
   /* demonstrativo */
   h+=sec('Demonstrativo dos tributos e alíquotas');
-  h+=`<p class="small">Cada tributo, com a base, a alíquota e o cálculo, para mostrar por que a carga de cada regime é a que é.</p><h3>Quadro comparativo de 2026 (aferição)</h3>${matrizImpostos(r26)}<h3>Quadro comparativo de 2027 (CBS ${pc4(N.P.cbs.base)})</h3>${matrizImpostos(r27)}<h3>O que mais pesa em 2027</h3><ul class="tight">${explicaCarga(r27).map(t=>'<li>'+t+'</li>').join('')}</ul>`;
-  for(const k of ['simples','hibrido','presumido','real']){const x=r27[k];if(!x)continue;h+=`<h3>${REG[k]}: imposto por imposto em 2027</h3>${tabelaLinhas(x,r27.A.rec)}${extrasRegime(x,r27.A.rec)}`}
+  h+=`<p class="small">Cada tributo, com a base, a alíquota e o cálculo, para mostrar por que a carga de cada regime é a que é.</p><h3>Quadro comparativo de 2026 (aferição)</h3>${matrizImpostos(r26)}<h3>Quadro comparativo de 2027 (CBS ${pc4(N.P.cbs.base)})</h3>${matrizImpostos(r27)}<h3>O que mais pesa em 2027</h3><ul class="tight">${explicaCarga(r27,2027).map(t=>'<li>'+t+'</li>').join('')}</ul>`;
+  for(const k of ['simples','hibrido','presumido','real']){const x=r27[k];if(!x)continue;h+=`<h3>${REG[k]}: imposto por imposto em 2027</h3>${tabelaLinhas(x,r27.A.rec)}${extrasRegime(x,r27.A.rec,2027)}`}
   /* 6 reforma */
   h+=sec('Reforma tributária e regime híbrido');
   const cb=N.P.cbs.base;
@@ -1877,7 +1880,7 @@ function chartConf(Y,pgm,ano){
 }
 function credCliRel(r){
   const Y=N.anos[2027],cb=N.P.cbs.base,tot=r.A.rec;let simples=0,reg=0;
-  const pcDas=(r.simples.imp.PIS||0)+(r.simples.imp.COFINS||0);
+  const pcDas=(r.simples.imp.CBS||0)+(r.simples.imp.PIS||0)+(r.simples.imp.COFINS||0);
   for(const x of Y.ativ){const rv=sum(x.m);simples+=pcDas*(rv/tot)*x.pctB2B;reg+=rv*(1-x.pctExp)*(1-x.red)*cb*x.pctB2B}
   return (simples||reg)?{simples,reg}:null;
 }

@@ -193,6 +193,29 @@ details.mini>div{padding:10px 0 0}
 .verdict b{display:block;font:700 15px var(--sans);margin-bottom:2px}
 .verdict p{margin:0;font-size:13.5px;color:var(--muted)}
 .actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:18px}
+
+/* ---- checklist de documentos ---- */
+.prog{display:flex;align-items:center;gap:14px;margin:6px 0 16px;flex-wrap:wrap}
+.pb{flex:1;min-width:160px;height:8px;border-radius:99px;background:var(--track);overflow:hidden}
+.pb i{display:block;height:100%;border-radius:99px;background:var(--btn);transition:width .3s}
+.chks{display:grid;gap:10px}
+.chk{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:6px 14px;align-items:center;border:1.5px solid var(--line);border-radius:16px;padding:14px 16px;background:var(--surface);transition:border-color .15s,background .15s}
+.chk.over{border-color:var(--accent);background:var(--soft)}
+.chk.done{background:var(--goodbg);border-color:transparent}
+.ck{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font:700 15px var(--sans);color:#fff;background:transparent;flex:none}
+.chk.done .ck{background:var(--good);border-color:var(--good)}
+.ct{min-width:0;display:flex;flex-direction:column;gap:2px}
+.ct b{font:700 14.5px var(--sans)}
+.ct .d{font-size:12.5px;line-height:1.45;color:var(--muted);max-width:68ch}
+.ct .st{font:700 12px var(--sans);color:var(--muted);margin-top:2px}
+.chk.done .ct .st{color:var(--good)}
+.ca{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.btn.sm{padding:8px 16px;font-size:13px;position:relative;display:inline-flex;margin:0;cursor:pointer;color:var(--ink)}
+.btn.sm input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;padding:0;border:0}
+.lk{position:relative;display:inline-flex;margin:0;background:none;border:0;padding:0;font:700 12.5px var(--sans);color:var(--accent);cursor:pointer}
+.lk input[type=file]{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer;padding:0;border:0}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+@media (max-width:640px){.chk{grid-template-columns:30px minmax(0,1fr)}.ca{grid-column:2;justify-content:flex-start}}
 @media (max-width:560px){.arow{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi .v{font-size:16px}.kpi{padding:12px}}
 @media (max-width:560px){.bar{grid-template-columns:1fr auto}.bar .t{grid-column:1/-1;order:3}.card{padding:18px;border-radius:16px}.regime{font-size:22px}.bignum{font-size:34px}}
 </style>
@@ -851,8 +874,8 @@ function dasPA(r){
   return tot;
 }
 //PGDAS_END
-/* ---------- Importar extrato do PGDAS-D ---------- */
-let pgState=null;
+/* ---------- Documentos para a análise ---------- */
+let pgState=null,xmlState=null;
 const PGURL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
 function loadPdfJs(){
   return new Promise((ok,err)=>{
@@ -874,112 +897,59 @@ function vazio(){
   const y=()=>({ativ:[],salarios:0,prolabore:0,rat:0,terc:0,compras:0,icmsCred:0,baseCredPC:0,baseCredCBS:0,despesas:0,adicoes:0,prejuizo:0,ipi:0,acess:{simples:0,hibrido:0,presumido:0,real:0}});
   return {example:false,socios:S.socios||1,pctDist:S.pctDist||100,contabil:S.contabil,icmsIntegra:S.icmsIntegra,cbs:S.cbs,histRec:0,histRecMensal:'',histFolha:0,anos:{2026:y(),2027:y()}};
 }
-const ICO_DOC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>';
-const ICO_XML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-5 4 5 4M16 8l5 4-5 4M14 5l-4 14"/></svg>';
-function cardImport(){
-  return `<div class="card"><div class="k">Passo 1 · opcional</div><h3 style="margin-top:4px">Importar documentos para preencher os dados</h3>
-  <p class="small" style="max-width:70ch">Arraste os arquivos para as áreas abaixo ou clique para escolher. A leitura acontece no seu navegador; nada é enviado a ninguém.</p>
-  ${ui.pgMsg?`<div class="banner ok">${esc(ui.pgMsg)}</div>`:''}${ui.xmlMsg?`<div class="banner ok">${esc(ui.xmlMsg)}</div>`:''}
-  <div class="imp-grid">
-   <div class="tile"><label class="drop" id="dropPg">${ICO_DOC}<b>Extrato do PGDAS-D</b><span>PDF do “Extrato do Simples Nacional” da apuração mais recente.</span><span class="go">Escolher PDF</span><input id="pgFile" type="file" accept=".pdf,.txt,application/pdf,text/plain" aria-label="Escolher o extrato do PGDAS-D"></label>
-    <details class="mini"><summary>Ou colar o texto do extrato</summary><div><textarea id="pgTxt" placeholder="Abra o PDF, use Ctrl+A, Ctrl+C e cole aqui"></textarea><div class="row" style="margin-top:8px"><button class="btn ghost" id="pgLer" type="button">Ler texto colado</button></div></div></details></div>
-   <div class="tile"><label class="drop" id="dropXml">${ICO_XML}<b>Notas fiscais em XML</b><span>NF-e e NFC-e de saída e de entrada, em arquivos soltos ou num .zip.</span><span class="go">Escolher arquivos</span><input id="xmlFiles" type="file" multiple accept=".xml,.zip,text/xml,application/zip" aria-label="Escolher XMLs ou ZIP"></label>
-    <div class="sublink"><label>Escolher uma pasta inteira<input id="xmlDir" type="file" webkitdirectory multiple aria-label="Escolher pasta de XMLs"></label></div></div>
-  </div>
-  <div id="pgOut" style="margin-top:16px"></div><div id="xmlOut" style="margin-top:16px"></div></div>`;
-}
-function kpi(l,v,s,k){return `<div class="kpi${k?' '+k:''}"><div class="l">${l}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:''}</div>`}
-function pgRender(){
-  const r=pgState,o=$('#pgOut'); if(!o)return;
-  if(!r){o.innerHTML='';return}
-  if(r.erro){o.innerHTML=`<div class="banner bad">${esc(r.erro)}</div>`;return}
-  const ch=m=>String(m).padStart(2,'0');
-  const m25=[...Array(12)].map((_,i)=>r.meses['2025-'+ch(i+1)]);
-  const completo=m25.every(v=>v!==undefined);
-  const calc=dasPA(r),tipos=Object.entries(TIPOS);
-  let ver;
-  if(calc===null)ver={k:'warn',ic:'!',t:'DAS sem conferência',d:'O extrato não informa o fator r; não dá para escolher entre os Anexos III e V.'};
-  else if(r.dasExtrato===null)ver={k:'warn',ic:'!',t:'DAS sem conferência',d:'Não encontrei o total do débito no extrato.'};
-  else{const d=calc-r.dasExtrato;
-    ver=Math.abs(d)<=1?{k:'good',ic:'✓',t:'DAS conferido com a apuração oficial',d:`O programa calculou ${brl2(calc)} e o extrato mostra ${brl2(r.dasExtrato)} (diferença de ${brl2(d)}). A tabela de alíquota e partilha usada para esses anexos e faixas bate com o PGDAS.`}
-      :{k:'bad',ic:'!',t:'DAS diverge da apuração oficial',d:`O programa calculou ${brl2(calc)} e o extrato mostra ${brl2(r.dasExtrato)} (diferença de ${brl2(d)}). Confira o tipo de cada atividade; se estiver certo, a tabela do programa precisa de revisão.`}}
-  let h=`<div class="preview"><h3>Extrato lido</h3><div class="kpis">`+
-    kpi('Período de apuração',ch(r.pa.mes)+'/'+r.pa.ano,r.regime?'Regime de '+esc(r.regime.toLowerCase()):'')+
-    kpi('Município',esc(r.local||'—'),r.optante==='Não'?'Não optante do Simples':'Optante do Simples')+
-    kpi('Receita do período',brl2(r.rpa.tot),r.rpa.ext?'Exportação '+brl2(r.rpa.ext):'Mercado interno')+
-    kpi('RBT12',brl2(r.rbt12),pc(r.rbt12/LIM,1)+' do limite de R$ 4,8 mi')+
-    kpi('Receita de 2025',completo?brl2(sum(m25)):'Incompleta','12 meses lidos'.replace('12',completo?'12':String(m25.filter(v=>v!==undefined).length)),completo?'':'warn')+
-    kpi('Folha para o fator r',r.folha.length?brl2(sum(r.folha.map(f=>f.v))):'Não informada','Fator r: '+esc(r.frTxt||'não informado'))+
-    kpi('ICMS/ISS no DAS',r.impedido==='Sim'?'Impedido':'Dentro do DAS','Sublimite de R$ 3,6 mi',r.impedido==='Sim'?'warn':'')+
-    `</div><h3>Atividades do período</h3><div class="arows">`;
-  r.blocos.forEach((b,i)=>{
-    h+=`<div class="arow"><div><div class="d">${esc(b.desc)}</div><div class="chips2"><span>${brl2(b.rev)}</span>${b.st>0?`<span>ICMS-ST ${brl2(b.st)}</span>`:''}${b.mono>0?`<span>Monofásico ${brl2(b.mono)}</span>`:''}${b.exp?'<span>Exportação</span>':''}</div></div>
-    <div><label for="pgt${i}">Tipo no planejador</label><select id="pgt${i}" data-pgt="${i}">${tipos.map(([k,t])=>`<option value="${k}" ${(b.tipo||'comercio')===k?'selected':''}>${esc(t.rot)}</option>`).join('')}</select></div></div>`;
-  });
-  h+=`</div><div class="verdict ${ver.k}"><div class="ic">${ver.ic}</div><div><b>${ver.t}</b><p>${ver.d}</p></div></div>`;
-  if(r.impedido==='Sim')h+=`<div class="banner warn" style="margin-top:12px">A empresa está impedida de recolher ICMS/ISS no DAS (sublimite). O programa trata o ICMS/ISS fora do DAS só pela RBT12; confira.</div>`;
-  if(!completo)h+=`<div class="banner warn" style="margin-top:12px">Faltam meses de 2025 no extrato. O histórico será preenchido só com a RBT12 e o fator r pode ficar impreciso.</div>`;
-  (r.avisos||[]).forEach(a=>h+=`<div class="banner warn" style="margin-top:12px">${esc(a)}</div>`);
-  h+=`<p class="small" style="margin-top:14px;max-width:80ch">Ao aplicar, o histórico de 2025 e as atividades de 2026 e 2027 são preenchidos. A receita anual de cada atividade começa igual à RBT12 distribuída pelo período lido: é só ponto de partida. Compras, créditos, despesas, pessoal, ICMS/ISS por atividade e custos acessórios ficam em zero, e os dados já digitados são substituídos.</p>
-  <div class="actions"><button class="btn" id="pgAplicar" type="button">Aplicar aos dados</button><button class="btn ghost" id="pgDescartar" type="button">Descartar</button></div></div>`;
-  o.innerHTML=h;
-  o.querySelectorAll('[data-pgt]').forEach(s=>s.onchange=()=>{r.blocos[+s.dataset.pgt].tipo=s.value;pgRender()});
-  $('#pgDescartar').onclick=()=>{pgState=null;pgRender()};
-  $('#pgAplicar').onclick=()=>aplicarPGDAS(r,completo,m25);
-}
-function aplicarPGDAS(r,completo,m25){
-  const cons=consolidarPGDAS(r); if(!cons.length)return;
-  const N=vazio();
-  N.histRec=completo?Math.round(sum(m25)*100)/100:r.rbt12;
-  N.histRecMensal=completo?m25.map(v=>v.toFixed(2).replace('.',',')).join('; '):'';
-  N.histFolha=r.folha.length?Math.round(sum(r.folha.map(f=>f.v))*100)/100:0;
-  for(const a of [2026,2027]){
-    N.anos[a].ativ=cons.map(c=>({nome:TIPOS[c.tipo].rot,tipo:c.tipo,anual:Math.round(r.rbt12*c.share*100)/100,mensal:'',
-      aliqICMS:0,aliqISS:0,pctST:Math.round(c.pctST*100)/100,pctMono:Math.round(c.pctMono*100)/100,pctExp:Math.round(c.pctExp*100)/100,pctB2B:0,red:0}));
-  }
-  S=N; pgState=null;
-  ui.pgMsg='Extrato aplicado. O aviso amarelo abaixo lista só o que ainda falta e se aplica às suas atividades. Preencha e clique em Calcular.';
-  renderDados(); calcular(); setTab('rel'); window.scrollTo(0,0);
-}
-function ligaPGDAS(){
-  const f=$('#pgFile'); if(!f)return;
-  const proc=txt=>{pgState=lerPGDAS(txt);ui.pgMeses=pgState&&!pgState.erro?pgState.meses:null;ui.docs=ui.docs||{};ui.docs.pg=pgState&&!pgState.erro?pgState:null;pgRender();xmlRender()};
-  f.onchange=async()=>{
-    const file=f.files[0]; if(!file)return;
-    const o=$('#pgOut'); o.innerHTML='<p class="small">Lendo o arquivo…</p>';
-    try{
-      if(/\.pdf$/i.test(file.name)||file.type==='application/pdf')proc(await pdfTexto(file));
-      else proc(await file.text());
-    }catch(e){pgState={erro:'Não consegui ler o arquivo ('+(e&&e.message?e.message:'erro')+'). Abra o PDF, copie todo o texto (Ctrl+A, Ctrl+C) e cole na caixa abaixo.'};pgRender()}
-  };
-  $('#pgLer').onclick=()=>{const t=$('#pgTxt').value.trim();if(!t){pgState={erro:'Cole primeiro o texto do extrato.'};pgRender();return}proc(t)};
-  pgRender();
-}
-
-/* ---------- Importar notas fiscais (XML) ---------- */
-let xmlState=null;
 const dig=s=>String(s||'').replace(/\D/g,'');
 const fmtCnpj=c=>c.length===14?c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'):c;
 const xq=(el,t)=>el?el.getElementsByTagNameNS('*',t)[0]||null:null;
 const xt=(el,t)=>{const n=xq(el,t);return n?n.textContent.trim():''};
 const xn=(el,t)=>{const v=parseFloat(xt(el,t));return isNaN(v)?0:v};
+const xcad=el=>el?(dig(xt(el,'CNPJ')||xt(el,'Cnpj'))||dig(xt(el,'CPF')||xt(el,'Cpf'))):'';
+function xdata(s){s=String(s||'').trim();const m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);return m?m[3]+'-'+m[2]+'-'+m[1]:s.slice(0,10)}
+function lerNfse(root,ign){
+  const g=(el,names)=>{for(const n of names){const v=xt(el,n);if(v)return v}return ''};
+  if(xq(root,'Cancelamento')||xq(root,'NfseCancelamento')||xq(root,'InfPedidoCancelamento')){ign.eventos++;return null}
+  const inf=xq(root,'infNFSe')||xq(root,'InfNfse')||xq(root,'infNfse')||root;
+  const valor=parseFloat(g(root,['vServ','ValorServicos']));
+  if(isNaN(valor)){ign.nfseIlegivel++;return null}
+  let aliq=parseFloat(g(root,['pAliqAplic','pAliq','Aliquota']))||0; if(aliq>0&&aliq<1)aliq*=100;
+  const iss=parseFloat(g(root,['vISSQN','ValorIss']))||0;
+  const pe=xq(root,'prest')||xq(root,'PrestadorServico')||xq(root,'Prestador')||xq(root,'emit')||xq(root,'IdentificacaoPrestador');
+  const te=xq(root,'toma')||xq(root,'TomadorServico')||xq(root,'Tomador');
+  const num=g(root,['nNFSe','Numero'])||(inf.getAttribute&&inf.getAttribute('Id'))||'';
+  const sn=g(root,['OptanteSimplesNacional','opSimpNac']);
+  const doc={tipo:'nfse',prest:xcad(pe),toma:xcad(te),dh:xdata(g(root,['dhEmi','DataEmissao','dhProc','dCompet','Competencia'])),valor,iss,aliq,
+    simples:g(root,['OptanteSimplesNacional'])?sn==='1':(g(root,['opSimpNac'])?sn==='2'||sn==='3':false)};
+  doc.chave='nfse|'+doc.prest+'|'+num+'|'+doc.dh+'|'+valor;
+  return doc;
+}
 function lerXml(text,ign){
   const d=new DOMParser().parseFromString(text,'application/xml');
   if(d.getElementsByTagName('parsererror').length){ign.invalidos++;return null}
   const root=d.documentElement,rn=root.localName;
-  if(/^(procEventoNFe|envEvento|evento|retEnvEvento)$/.test(rn)){
+  if(/^(procEvento(NFe|CTe)|envEvento|evento|retEnvEvento)$/.test(rn)){
     const ev=xq(root,'evento'),inf=ev?xq(ev,'infEvento'):xq(root,'infEvento');
     const ret=xq(root,'retEvento'),cs=ret?xt(ret,'cStat'):'135';
-    if(inf&&xt(inf,'tpEvento')==='110111'&&['135','136','155'].includes(cs))return {cancel:xt(inf,'chNFe')};
+    if(inf&&xt(inf,'tpEvento')==='110111'&&['135','136','155'].includes(cs))return {cancel:xt(inf,'chNFe')||xt(inf,'chCTe')};
     ign.eventos++;return null;
   }
+  const ic=xq(root,'infCte');
+  if(ic){
+    const ide=xq(ic,'ide'),emit=xq(ic,'emit'),prot=xq(root,'infProt'),t3=xq(ide,'toma3'),t4=xq(ide,'toma4');
+    let toma='';
+    if(t3){const el=xq(ic,{'0':'rem','1':'exped','2':'receb','3':'dest'}[xt(t3,'toma')]||'rem');toma=xcad(el)}
+    else if(t4)toma=xcad(t4); else toma=xcad(xq(ic,'toma'));
+    const icms=xq(ic,'ICMS'),ig=icms?icms.firstElementChild:null;
+    return {tipo:'cte',chave:(ic.getAttribute('Id')||'').replace(/^CTe/,'')||xt(root,'chCTe'),dh:xdata(xt(ide,'dhEmi')),cStat:prot?xt(prot,'cStat'):null,
+      emit:xcad(emit),crt:xt(emit,'CRT'),toma,vTPrest:xn(xq(ic,'vPrest'),'vTPrest'),cst:ig?xt(ig,'CST'):'',vICMS:ig?xn(ig,'vICMS'):0};
+  }
   const inf=xq(root,'infNFe');
-  if(!inf){ if(/nfse|CompNfse|InfNfse|GerarNfse/i.test(rn+(root.innerHTML||'').slice(0,300)))ign.nfse++; else ign.outros++; return null }
+  if(!inf){
+    if(xq(root,'infNFSe')||xq(root,'InfNfse')||xq(root,'infNfse')||xq(root,'infDPS')||/nfse/i.test(rn))return lerNfse(root,ign);
+    ign.outros++;return null;
+  }
   const ide=xq(inf,'ide'),emit=xq(inf,'emit'),dest=xq(inf,'dest'),prot=xq(root,'infProt');
   const dh=xt(ide,'dhEmi')||xt(ide,'dEmi');
-  const doc={chave:(inf.getAttribute('Id')||'').replace(/^NFe/,'')||xt(root,'chNFe'),mod:xt(ide,'mod'),tpNF:xt(ide,'tpNF'),
-    dh:dh.slice(0,10),cStat:prot?xt(prot,'cStat'):null,emit:dig(xt(emit,'CNPJ'))||dig(xt(emit,'CPF')),crt:xt(emit,'CRT'),
-    dest:dig(xt(dest,'CNPJ'))||dig(xt(dest,'CPF')),itens:[]};
+  const doc={tipo:'nfe',chave:(inf.getAttribute('Id')||'').replace(/^NFe/,'')||xt(root,'chNFe'),mod:xt(ide,'mod'),tpNF:xt(ide,'tpNF'),
+    dh:dh.slice(0,10),cStat:prot?xt(prot,'cStat'):null,emit:xcad(emit),crt:xt(emit,'CRT'),dest:xcad(dest),itens:[]};
   for(const det of inf.getElementsByTagNameNS('*','det')){
     const p=xq(det,'prod'),im=xq(det,'imposto'),icms=xq(im,'ICMS'),ig=icms?icms.firstElementChild:null,pis=xq(im,'PIS'),pg=pis?pis.firstElementChild:null;
     if(xt(p,'indTot')==='0')continue;
@@ -990,7 +960,7 @@ function lerXml(text,ign){
   return doc;
 }
 function classeCfop(cfop,dir){
-  const t=+String(cfop).slice(1),p=String(cfop)[0],r=(a,b)=>t>=a&&t<=b;
+  const t=+String(cfop).slice(1),r=(a,b)=>t>=a&&t<=b;
   if(r(151,159))return 'transf';
   if(r(201,210)||t===410||t===411)return dir==='saida'?'devol_compra':'devol_venda';
   if(dir==='saida'){
@@ -1007,20 +977,30 @@ function classeCfop(cfop,dir){
 }
 const INDUSTRIA=[101,103,109,111,113,115,116,401,402];
 const CST_CRED=['00','10','20','51','70','90'];
+function papelDoc(d,cn){
+  const same=c=>!!c&&(cn.length===8?c.slice(0,8)===cn:c===cn);
+  if(d.tipo==='nfe'){ if(same(d.emit))return d.tpNF==='1'?'saida':'entrada'; if(same(d.dest))return 'entrada'; return null }
+  if(d.tipo==='nfse'){ if(same(d.prest))return 'prestado'; if(same(d.toma))return 'tomado'; return null }
+  if(d.tipo==='cte'){ return same(d.toma)?'frete':null }
+  return null;
+}
 function agregarXml(st){
-  const cn=st.cnpj.length>=14?st.cnpj.slice(0,8):st.cnpj, same=c=>!!c&&(cn.length===8?c.slice(0,8)===cn:c===cn);
-  const seen=new Set(),por={},c={dup:0,canc:0,naoAut:0,terceiros:0,semItens:0};
+  const cn=st.cnpj.length>=14?st.cnpj.slice(0,8):st.cnpj;
+  const seen=new Set(),por={},c={dup:0,canc:0,naoAut:0,terceiros:0};
   const mk=()=>({rec:{},recTipo:{comercio:0,industria:0,servico:0},st:0,mono:0,exp:0,eligBase:0,icmsVal:0,devol:{},devCompra:0,
-    compras:{},comprasTot:0,icmsCred:0,baseCredPC:0,baseCredCBS:0,fornSimples:0,uso:0,ativo:0,outras:0,nSaida:0,nEntrada:0,meses:new Set()});
+    compras:{},comprasTot:0,icmsCred:0,baseCredPC:0,baseCredCBS:0,fornSimples:0,uso:0,ativo:0,outras:0,nSaida:0,nEntrada:0,meses:new Set(),
+    servPrest:0,issPrest:0,baseIssPrest:0,nPrest:0,servTom:0,servTomSimples:0,issTom:0,nTom:0,frete:0,freteIcms:0,freteSimples:0,nFrete:0,servTomMes:{},freteMes:{}});
   for(const d of st.docs){
     if(seen.has(d.chave)){c.dup++;continue} seen.add(d.chave);
     if(st.cancel.has(d.chave)){c.canc++;continue}
     if(d.cStat&&!['100','150'].includes(d.cStat)){c.naoAut++;continue}
-    let dir=null; if(same(d.emit))dir=d.tpNF==='1'?'saida':'entrada'; else if(same(d.dest))dir='entrada';
-    if(!dir){c.terceiros++;continue}
-    const ano=d.dh.slice(0,4),mes=d.dh.slice(5,7); if(!ano)continue;
+    const papel=papelDoc(d,cn); if(!papel){c.terceiros++;continue}
+    const ano=d.dh.slice(0,4),mes=d.dh.slice(5,7); if(!ano||!mes)continue;
     const Y=por[ano]=por[ano]||mk(); Y.meses.add(mes);
-    dir==='saida'?Y.nSaida++:Y.nEntrada++;
+    if(papel==='prestado'){Y.rec[mes]=(Y.rec[mes]||0)+d.valor;Y.recTipo.servico+=d.valor;Y.servPrest+=d.valor;Y.nPrest++;if(d.iss>0){Y.issPrest+=d.iss;Y.baseIssPrest+=d.valor}continue}
+    if(papel==='tomado'){Y.servTom+=d.valor;Y.nTom++;Y.issTom+=d.iss;Y.servTomMes[mes]=(Y.servTomMes[mes]||0)+d.valor;if(d.simples)Y.servTomSimples+=d.valor;continue}
+    if(papel==='frete'){Y.frete+=d.vTPrest;Y.nFrete++;Y.freteMes[mes]=(Y.freteMes[mes]||0)+d.vTPrest;if(CST_CRED.includes(d.cst))Y.freteIcms+=d.vICMS;if(d.crt==='1'||d.crt==='2')Y.freteSimples+=d.vTPrest;continue}
+    const dir=papel; dir==='saida'?Y.nSaida++:Y.nEntrada++;
     for(const it of d.itens){
       const base=it.vProd+it.vFrete+it.vSeg+it.vOutro-it.vDesc, custo=base+it.vIPI+it.vST, k=classeCfop(it.cfop,dir), cf=+String(it.cfop).slice(1);
       if(k==='receita'||k==='servico'){
@@ -1045,12 +1025,11 @@ function agregarXml(st){
   return {por,c};
 }
 function detectarCnpj(docs){
-  const n={}; for(const d of docs){for(const k of [d.emit,d.dest]){if(k&&k.length===14)n[k]=(n[k]||0)+1}}
+  const n={}; for(const d of docs){for(const k of [d.emit,d.dest,d.prest,d.toma]){if(k&&k.length===14)n[k]=(n[k]||0)+1}}
   const e=Object.entries(n).sort((a,b)=>b[1]-a[1]); return e.length?e[0][0]:'';
 }
 async function lerArquivosXml(files,prog){
-  const ign={invalidos:0,nfse:0,outros:0,eventos:0,naoXml:0},docs=[],cancel=new Set();
-  const txts=[];
+  const ign={invalidos:0,nfse:0,nfseIlegivel:0,outros:0,eventos:0,naoXml:0},docs=[],cancel=new Set(),txts=[];
   for(const f of files){
     const nm=(f.webkitRelativePath||f.name).toLowerCase();
     if(nm.endsWith('.zip')){
@@ -1068,16 +1047,100 @@ async function lerArquivosXml(files,prog){
   }
   return {docs,cancel,ign,total:txts.length};
 }
-function cardXml(){return ''}
+/* ---- checklist ---- */
+const SLOTS=[
+ {id:'saida',t:'Notas de saída e serviços prestados',d:'NF-e, NFC-e e NFS-e emitidas pela empresa. Base da receita, das segregações (ST, monofásico, exportação) e do ISS.'},
+ {id:'entrada',t:'Notas de entrada',d:'NF-e recebidas de fornecedores, inclusive devoluções de venda. Base das compras e dos créditos de ICMS, PIS/COFINS e CBS.'},
+ {id:'tomados',t:'Notas de serviços tomados',d:'NFS-e de serviços contratados pela empresa. Entram nas despesas e nos créditos.'},
+ {id:'cte',t:'CT-e (frete)',d:'Conhecimentos de transporte em que a empresa é a tomadora do frete.'}
+];
+const ESPERADO={saida:['saida','prestado'],entrada:['entrada'],tomados:['tomado'],cte:['frete']};
+function slotDocs(id){return xmlState&&xmlState.slots?xmlState.slots[id].docs:[]}
+function slotStatus(id){
+  const dd=slotDocs(id); if(!dd.length)return null;
+  const ds=dd.map(d=>d.dh).filter(Boolean).sort();
+  const f=s=>s?s.slice(5,7)+'/'+s.slice(0,4):'';
+  return dd.length+' documento(s)'+(ds.length?' · '+f(ds[0])+(f(ds[0])!==f(ds[ds.length-1])?' a '+f(ds[ds.length-1]):''):'');
+}
+function docsContagem(){
+  const pg=pgState&&!pgState.erro;
+  return {pgdas:!!pg,saida:slotDocs('saida').length,entrada:slotDocs('entrada').length,tomados:slotDocs('tomados').length,cte:slotDocs('cte').length};
+}
+function linhaChk(id,titulo,desc,status,extra,inputHtml){
+  const ok=!!status;
+  return `<div class="chk${ok?' done':''}" id="row-${id}"><span class="ck" aria-hidden="true">${ok?'✓':''}</span>
+   <div class="ct"><b>${titulo}</b><span class="d">${desc}</span><span class="st">${ok?esc(status):'Nenhum arquivo anexado'}</span></div>
+   <div class="ca">${inputHtml}${ok?`<button class="lk" type="button" data-rm="${id}">Remover</button>`:''}</div>${extra||''}</div>`;
+}
+function cardImport(){
+  const c=docsContagem(),n=Object.values(c).filter(Boolean).length;
+  const pgSt=pgState&&!pgState.erro?`Período ${String(pgState.pa.mes).padStart(2,'0')}/${pgState.pa.ano} · RBT12 ${brl(pgState.rbt12)}`:null;
+  const btn=(id,acc,mult)=>`<label class="btn ghost sm">Anexar<input id="${id}" type="file" ${mult?'multiple':''} accept="${acc}" aria-label="Anexar"></label>`;
+  let h=`<div class="card" id="impCard"><div class="k">Passo 1 · documentos da análise</div><h3 style="margin-top:4px">Checklist de documentos</h3>
+  <p class="small" style="max-width:72ch">Anexe cada tipo no seu lugar, ou arraste os arquivos sobre a linha. Quanto mais itens marcados, mais completa fica a análise e o relatório. A leitura acontece no seu navegador; nada é enviado.</p>
+  ${ui.msg?`<div class="banner ok">${esc(ui.msg)}</div>`:''}
+  <div class="prog"><div class="pb"><i style="width:${Math.round(n/5*100)}%"></i></div><span class="small"><b>${n} de 5</b> documentos anexados</span></div>
+  <div class="chks">`+
+  linhaChk('pgdas','Extrato do PGDAS-D','PDF do “Extrato do Simples Nacional” da apuração mais recente. Traz RBT12, receita declarada e o DAS pago.',pgSt,
+    `<details class="mini" style="grid-column:2/-1"><summary>Ou colar o texto do extrato</summary><div><textarea id="pgTxt" placeholder="Abra o PDF, use Ctrl+A, Ctrl+C e cole aqui"></textarea><div class="row" style="margin-top:8px"><button class="btn ghost sm" id="pgLer" type="button">Ler texto colado</button></div></div></details>`,
+    btn('pgFile','.pdf,.txt,application/pdf,text/plain',false))+
+  SLOTS.map(s=>linhaChk(s.id,s.t,s.d,slotStatus(s.id),'',btn('in-'+s.id,'.xml,.zip,text/xml,application/zip',true)+`<label class="lk">Escolher pasta<input id="fo-${s.id}" type="file" webkitdirectory multiple aria-label="Escolher pasta"></label>`)).join('')+
+  `</div><div id="pgOut" style="margin-top:16px"></div><div id="xmlOut" style="margin-top:16px"></div>
+  <div class="actions"><button class="btn" id="docsAplicar" type="button" ${n?'':'disabled'}>Aplicar à análise e gerar relatório</button><span class="small">${n?'Preenche os dados com o que foi lido e abre o relatório.':'Anexe ao menos um documento.'}</span></div></div>`;
+  return h;
+}
+function kpi(l,v,s,k){return `<div class="kpi${k?' '+k:''}"><div class="l">${l}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:''}</div>`}
+function pgRender(){
+  const r=pgState,o=$('#pgOut'); if(!o)return;
+  if(!r){o.innerHTML='';return}
+  if(r.erro){o.innerHTML=`<div class="banner bad">${esc(r.erro)}</div>`;return}
+  const ch=m=>String(m).padStart(2,'0');
+  const m25=[...Array(12)].map((_,i)=>r.meses['2025-'+ch(i+1)]);
+  const completo=m25.every(v=>v!==undefined);
+  const calc=dasPA(r),tipos=Object.entries(TIPOS);
+  let ver;
+  if(calc===null)ver={k:'warn',ic:'!',t:'DAS sem conferência',d:'O extrato não informa o fator r; não dá para escolher entre os Anexos III e V.'};
+  else if(r.dasExtrato===null)ver={k:'warn',ic:'!',t:'DAS sem conferência',d:'Não encontrei o total do débito no extrato.'};
+  else{const d=calc-r.dasExtrato;
+    ver=Math.abs(d)<=1?{k:'good',ic:'✓',t:'DAS conferido com a apuração oficial',d:`O programa calculou ${brl2(calc)} e o extrato mostra ${brl2(r.dasExtrato)} (diferença de ${brl2(d)}). A tabela de alíquota e partilha usada para esses anexos e faixas bate com o PGDAS.`}
+      :{k:'bad',ic:'!',t:'DAS diverge da apuração oficial',d:`O programa calculou ${brl2(calc)} e o extrato mostra ${brl2(r.dasExtrato)} (diferença de ${brl2(d)}). Confira o tipo de cada atividade; se estiver certo, a tabela do programa precisa de revisão.`}}
+  let h=`<div class="preview"><h3>Extrato do PGDAS-D lido</h3><div class="kpis">`+
+    kpi('Período de apuração',ch(r.pa.mes)+'/'+r.pa.ano,r.regime?'Regime de '+esc(r.regime.toLowerCase()):'')+
+    kpi('Município',esc(r.local||'—'),r.optante==='Não'?'Não optante do Simples':'Optante do Simples')+
+    kpi('Receita do período',brl2(r.rpa.tot),r.rpa.ext?'Exportação '+brl2(r.rpa.ext):'Mercado interno')+
+    kpi('RBT12',brl2(r.rbt12),pc(r.rbt12/LIM,1)+' do limite de R$ 4,8 mi')+
+    kpi('Receita de 2025',completo?brl2(sum(m25)):'Incompleta',(completo?'12':String(m25.filter(v=>v!==undefined).length))+' meses lidos',completo?'':'warn')+
+    kpi('Folha para o fator r',r.folha.length?brl2(sum(r.folha.map(f=>f.v))):'Não informada','Fator r: '+esc(r.frTxt||'não informado'))+
+    kpi('ICMS/ISS no DAS',r.impedido==='Sim'?'Impedido':'Dentro do DAS','Sublimite de R$ 3,6 mi',r.impedido==='Sim'?'warn':'')+
+    `</div><h3>Atividades do período</h3><div class="arows">`;
+  r.blocos.forEach((b,i)=>{
+    h+=`<div class="arow"><div><div class="d">${esc(b.desc)}</div><div class="chips2"><span>${brl2(b.rev)}</span>${b.st>0?`<span>ICMS-ST ${brl2(b.st)}</span>`:''}${b.mono>0?`<span>Monofásico ${brl2(b.mono)}</span>`:''}${b.exp?'<span>Exportação</span>':''}</div></div>
+    <div><label for="pgt${i}">Tipo no planejador</label><select id="pgt${i}" data-pgt="${i}">${tipos.map(([k,t])=>`<option value="${k}" ${(b.tipo||'comercio')===k?'selected':''}>${esc(t.rot)}</option>`).join('')}</select></div></div>`;
+  });
+  h+=`</div><div class="verdict ${ver.k}"><div class="ic">${ver.ic}</div><div><b>${ver.t}</b><p>${ver.d}</p></div></div>`;
+  if(r.impedido==='Sim')h+=`<div class="banner warn" style="margin-top:12px">A empresa está impedida de recolher ICMS/ISS no DAS (sublimite). O programa trata o ICMS/ISS fora do DAS só pela RBT12; confira.</div>`;
+  if(!completo)h+=`<div class="banner warn" style="margin-top:12px">Faltam meses de 2025 no extrato. O histórico será preenchido só com a RBT12 e o fator r pode ficar impreciso.</div>`;
+  (r.avisos||[]).forEach(a=>h+=`<div class="banner warn" style="margin-top:12px">${esc(a)}</div>`);
+  h+=`</div>`;
+  o.innerHTML=h;
+  o.querySelectorAll('[data-pgt]').forEach(s=>s.onchange=()=>{r.blocos[+s.dataset.pgt].tipo=s.value;pgRender()});
+}
 function xmlRender(){
-  const o=$('#xmlOut'); if(!o)return; const st=xmlState; if(!st){o.innerHTML='';return}
+  const o=$('#xmlOut'); if(!o)return; const st=xmlState;
+  if(!st||!st.slots){o.innerHTML='';return}
   if(st.erro){o.innerHTML=`<div class="banner bad">${esc(st.erro)}</div>`;return}
+  st.docs=SLOTS.flatMap(s=>st.slots[s.id].docs);
   const ign=st.ign;
-  if(!st.docs.length){o.innerHTML=`<div class="banner warn">Nenhuma NF-e ou NFC-e lida. ${ign.nfse?ign.nfse+' arquivo(s) parecem NFS-e (serviço), que ainda não leio. ':''}${ign.outros+ign.invalidos+ign.naoXml?'Ignorados: '+(ign.outros+ign.invalidos+ign.naoXml)+' arquivo(s) de outro tipo ou inválidos.':''}</div>`;return}
+  if(!st.docs.length){o.innerHTML=ign.outros+ign.invalidos+ign.naoXml+ign.nfse+ign.nfseIlegivel?`<div class="banner warn">Nenhuma nota válida lida.${ign.nfseIlegivel?' '+ign.nfseIlegivel+' NFS-e em layout que não consegui ler: me envie um exemplo.':''} Ignorados: ${ign.outros+ign.invalidos+ign.naoXml} arquivo(s) de outro tipo ou inválidos.</div>`:'';return}
+  if(!st.cnpj)st.cnpj=detectarCnpj(st.docs);
   const cn=dig(st.cnpj); const {por,c}=cn.length>=8?agregarXml({...st,cnpj:cn}):{por:{},c:{}};
   const anos=Object.keys(por).sort(); if(!st.ano||!por[st.ano])st.ano=anos[anos.length-1];
   const Y=por[st.ano];
-  if(Y){ui.docs=ui.docs||{};ui.docs.xml={Y,ano:st.ano,c,ign,ndocs:st.docs.length,cnpj:cn}}
+  ui.docs=ui.docs||{};
+  if(Y)ui.docs.xml={Y,ano:st.ano,c,ign,ndocs:st.docs.length,cnpj:cn};
+  const cn8=cn.length>=14?cn.slice(0,8):cn;
+  const fora=[];
+  for(const s of SLOTS){const bad=st.slots[s.id].docs.filter(d=>{const p=papelDoc(d,cn8);return p&&!ESPERADO[s.id].includes(p)}).length;if(bad)fora.push(`${bad} documento(s) em “${s.t}” têm outro papel para este CNPJ (por exemplo, nota de entrada no campo de saída). Foram usados mesmo assim, conforme o papel real.`)}
   const descart=(c.dup||0)+(c.canc||0)+(c.naoAut||0);
   let h=`<div class="preview"><h3>Notas lidas</h3><div class="grid" style="margin-bottom:12px"><div><label for="xmlCnpj">CNPJ da empresa (detectado, confira)</label><input id="xmlCnpj" type="text" value="${esc(fmtCnpj(st.cnpj))}"></div>
   <div><label for="xmlAno">Ano a usar</label><select id="xmlAno">${anos.map(a=>`<option ${a===st.ano?'selected':''}>${a}</option>`).join('')}</select></div></div>`;
@@ -1086,18 +1149,21 @@ function xmlRender(){
   const liq=m=>(Y.rec[m]||0)-(Y.devol[m]||0),rec=sum(Object.values(Y.rec)),dev=sum(Object.values(Y.devol));
   const aliq=Y.eligBase>0?Y.icmsVal/Y.eligBase:0;
   h+=`<div class="kpis">`+
-    kpi('Notas lidas',String(st.docs.length),descart?descart+' descartada(s): duplicada, cancelada ou não autorizada':'Nenhuma descartada')+
+    kpi('Documentos lidos',String(st.docs.length),descart?descart+' descartado(s): duplicado, cancelado ou não autorizado':'Nenhum descartado')+
     kpi('Receita bruta '+st.ano,brl(rec),'Devoluções de '+brl(dev))+
+    (Y.nPrest?kpi('Serviços prestados',brl(Y.servPrest),Y.nPrest+' NFS-e'+(Y.baseIssPrest?' · ISS '+pc(Y.issPrest/Y.baseIssPrest,1):'')):'')+
     kpi('ICMS-ST',rec?pc(Y.st/rec,1):'—','Parcela da receita (substituído)')+
     kpi('Monofásico',rec?pc(Y.mono/rec,1):'—','Parcela da receita (PIS/COFINS)')+
     kpi('Exportação',rec?pc(Y.exp/rec,1):'—','Parcela da receita')+
     kpi('ICMS nas vendas',Y.icmsVal>0?pc(aliq,1):'Não destacado','Alíquota efetiva',Y.icmsVal>0?'':'warn')+
-    `</div><h3>Compras e créditos estimados</h3><div class="kpis">`+
+    `</div><h3>Compras, serviços tomados e fretes</h3><div class="kpis">`+
     kpi('Compras (insumos e revenda)',brl(Y.comprasTot),'Valor da nota')+
-    kpi('ICMS creditável',brl(Y.icmsCred),'Nas entradas')+
-    kpi('Base PIS/COFINS',brl(Y.baseCredPC),'Crédito potencial de '+brl(Y.baseCredPC*.0925)+' no Real')+
-    kpi('Base CBS/IBS',brl(Y.baseCredCBS),'Fornecedores do regime normal')+
-    kpi('Fornecedores do Simples',brl(Y.fornSimples),'Crédito limitado')+
+    kpi('ICMS creditável',brl(Y.icmsCred+Y.freteIcms),Y.freteIcms?'Inclui '+brl(Y.freteIcms)+' de fretes':'Nas entradas')+
+    kpi('Base PIS/COFINS',brl(Y.baseCredPC+Y.servTom+Y.frete-Y.freteIcms),'Crédito potencial de '+brl((Y.baseCredPC+Y.servTom+Y.frete-Y.freteIcms)*.0925)+' no Real')+
+    kpi('Base CBS/IBS',brl(Y.baseCredCBS+Y.servTom-Y.servTomSimples+Y.frete-Y.freteSimples),'Fornecedores do regime normal')+
+    kpi('Serviços tomados',brl(Y.servTom),Y.nTom?Y.nTom+' NFS-e':'Nenhuma NFS-e de tomados')+
+    kpi('Fretes (CT-e)',brl(Y.frete),Y.nFrete?Y.nFrete+' CT-e':'Nenhum CT-e')+
+    kpi('Fornecedores do Simples',brl(Y.fornSimples+Y.servTomSimples+Y.freteSimples),'Crédito limitado')+
     kpi('Uso e consumo / ativo',brl(Y.uso)+' / '+brl(Y.ativo),'Uso e consumo vira despesa')+
     `</div><h3>Receita e compras por mês de ${st.ano}</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Receita nas notas (líquida)</th>${pgm?'<th>Extrato PGDAS</th><th>Diferença</th>':''}<th>Compras</th></tr></thead><tbody>`;
   for(const m of ms){
@@ -1105,66 +1171,101 @@ function xmlRender(){
     h+=`<tr><td>${m}/${st.ano}</td><td class="n">${brl2(v)}</td>${pgm?`<td class="n">${e===undefined?'—':brl2(e)}</td><td class="n">${d===null?'—':(Math.abs(d)<=1?'<span class="tag good">confere</span>':'<span class="tag bad">'+brl2(d)+'</span>')}</td>`:''}<td class="n">${brl2(Y.compras[m]||0)}</td></tr>`;
   }
   h+=`</tbody></table></div>`;
-  if(!pgm)h+=`<p class="small" style="margin-top:8px">Leia também o extrato do PGDAS-D para comparar a receita das notas com a declarada.</p>`;
-  const av=[];
-  if(ign.nfse)av.push(`${ign.nfse} arquivo(s) parecem NFS-e (serviço) e foram ignorados: ainda não leio esse formato.`);
+  if(!pgm)h+=`<p class="small" style="margin-top:8px">Anexe também o extrato do PGDAS-D para comparar a receita das notas com a declarada.</p>`;
+  const av=[...fora];
+  if(ign.nfseIlegivel)av.push(`${ign.nfseIlegivel} NFS-e em layout que não consegui ler foram ignoradas. Envie um exemplo do município para eu incluir o formato.`);
   if(Y.icmsVal===0&&Y.eligBase>0)av.push('As notas de saída não destacam ICMS, o que é normal para empresa do Simples. A alíquota de ICMS por atividade precisa ser informada à mão.');
-  if(nm<12)av.push(`As notas cobrem ${nm} de 12 meses de ${st.ano}. <label style="display:inline;color:inherit;font-weight:700"><input id="xmlAnual" type="checkbox" ${st.anual?'checked':''}> Projetar o ano pela média dos meses lidos</label> (hipótese: multiplica por ${nm>0?(12/nm).toFixed(2).replace('.',','):'—'}).`);
-  av.push('Valores estimados a partir de CFOP e CST: o monofásico depende do CST de PIS informado e a base de CBS/IBS usa o valor da nota, a conferir com a LC 214.');
-  h+=av.map(a=>`<div class="banner warn" style="margin-top:12px">${a}</div>`).join('');
-  h+=`<p class="small" style="margin-top:14px;max-width:80ch">Ao aplicar, atividades, compras, créditos e despesas de 2026 e 2027 são preenchidos como ponto de partida${st.ano==='2025'&&nm===12?', e o histórico de 2025 também':''}. Os demais campos são mantidos.</p>
-  <div class="actions"><button class="btn" id="xmlAplicar" type="button">Aplicar aos dados</button><button class="btn ghost" id="xmlDescartar" type="button">Descartar</button></div></div>`;
-  o.innerHTML=h; wireXml(Y,nm);
+  if(nm<12)av.push(`Os documentos cobrem ${nm} de 12 meses de ${st.ano}. <label style="display:inline;color:inherit;font-weight:700"><input id="xmlAnual" type="checkbox" ${st.anual?'checked':''}> Projetar o ano pela média dos meses lidos</label> (hipótese: multiplica por ${nm>0?(12/nm).toFixed(2).replace('.',','):'—'}).`);
+  av.push('Valores estimados a partir de CFOP, CST e layouts de NFS-e e CT-e: confira por amostragem. A base de CBS/IBS usa o valor do documento e ainda precisa ser conferida com a LC 214.');
+  h+=av.map(a=>`<div class="banner warn" style="margin-top:12px">${a}</div>`).join('')+`</div>`;
+  o.innerHTML=h; wireXml();
 }
-function wireXml(Y,nm){
-  const st=xmlState;
+function wireXml(){
+  const st=xmlState; if(!st)return;
   const cn=$('#xmlCnpj'); if(cn)cn.onchange=()=>{st.cnpj=dig(cn.value);xmlRender()};
   const an=$('#xmlAno'); if(an)an.onchange=()=>{st.ano=an.value;xmlRender()};
   const au=$('#xmlAnual'); if(au)au.onchange=()=>{st.anual=au.checked;xmlRender()};
-  const d=$('#xmlDescartar'); if(d)d.onclick=()=>{xmlState=null;xmlRender()};
-  const a=$('#xmlAplicar'); if(a)a.onclick=()=>aplicarXml(Y,nm);
 }
-function aplicarXml(Y,nm){
-  const st=xmlState,f=(st.anual&&nm<12&&nm>0)?12/nm:1,r2=v=>Math.round(v*100)/100;
-  if(S.example)S=vazio();
-  const rec=sum(Object.values(Y.rec)),dev=sum(Object.values(Y.devol)),aliq=Y.eligBase>0?Y.icmsVal/Y.eligBase*100:0;
-  const tipos=Object.entries(Y.recTipo).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
-  if(!tipos.length)return;
-  const ativ=tipos.map(([t,v],i)=>{
-    const liq=Math.max(0,v-(i===0?dev:0)), tp=t==='servico'?'serv_fr':t;
-    return {nome:TIPOS[tp].rot,tipo:tp,anual:r2(liq*f),mensal:'',aliqICMS:t==='servico'?0:r2(aliq),aliqISS:0,
-      pctST:r2(rec?Y.st/rec*100:0),pctMono:r2(rec?Y.mono/rec*100:0),pctExp:r2(rec?Y.exp/rec*100:0),pctB2B:0,red:0};
-  });
-  for(const a of [2026,2027]){
-    const y=S.anos[a]; y.ativ=JSON.parse(JSON.stringify(ativ));
-    y.compras=r2(Y.comprasTot*f); y.icmsCred=r2(Y.icmsCred*f); y.baseCredPC=r2(Y.baseCredPC*f); y.baseCredCBS=r2(Y.baseCredCBS*f); y.despesas=r2(Y.uso*f);
+function aplicarTudo(){
+  const r=pgState&&!pgState.erro?pgState:null,st=xmlState,r2=v=>Math.round(v*100)/100;
+  const cn=st?dig(st.cnpj):'';
+  let Y=null,nm=0;
+  if(st&&st.slots){st.docs=SLOTS.flatMap(s=>st.slots[s.id].docs);if(st.docs.length&&cn.length>=8){const {por}=agregarXml({...st,cnpj:cn});Y=por[st.ano]||null;nm=Y?Y.meses.size:0}}
+  if(!r&&!Y)return;
+  const N=vazio();
+  if(r){
+    const cons=consolidarPGDAS(r),ch=m=>String(m).padStart(2,'0');
+    const m25=[...Array(12)].map((_,i)=>r.meses['2025-'+ch(i+1)]),completo=m25.every(v=>v!==undefined);
+    N.histRec=completo?r2(sum(m25)):r.rbt12;
+    N.histRecMensal=completo?m25.map(v=>v.toFixed(2).replace('.',',')).join('; '):'';
+    N.histFolha=r.folha.length?r2(sum(r.folha.map(f=>f.v))):0;
+    for(const a of [2026,2027])N.anos[a].ativ=cons.map(c=>({nome:TIPOS[c.tipo].rot,tipo:c.tipo,anual:r2(r.rbt12*c.share),mensal:'',aliqICMS:0,aliqISS:0,pctST:r2(c.pctST),pctMono:r2(c.pctMono),pctExp:r2(c.pctExp),pctB2B:0,red:0}));
   }
-  if(st.ano==='2025'&&nm===12){S.histRec=r2(rec-dev); S.histRecMensal=[...Array(12)].map((_,i)=>{const m=String(i+1).padStart(2,'0');return ((Y.rec[m]||0)-(Y.devol[m]||0)).toFixed(2).replace('.',',')}).join('; ')}
-  S.example=false; xmlState=null;
-  ui.xmlMsg='Notas aplicadas. O aviso amarelo abaixo lista só o que ainda falta e se aplica às suas atividades. Confira os valores estimados e clique em Calcular.';
+  if(Y){
+    const f=(st.anual&&nm<12&&nm>0)?12/nm:1;
+    const rec=sum(Object.values(Y.rec)),dev=sum(Object.values(Y.devol)),aliq=Y.eligBase>0?Y.icmsVal/Y.eligBase*100:0,aliqIss=Y.baseIssPrest>0?Y.issPrest/Y.baseIssPrest*100:0;
+    const tipos=Object.entries(Y.recTipo).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+    if(tipos.length){
+      const ativ=tipos.map(([t,v],i)=>{const liq=Math.max(0,v-(i===0?dev:0)),tp=t==='servico'?'serv_fr':t;
+        return {nome:TIPOS[tp].rot,tipo:tp,anual:r2(liq*f),mensal:'',aliqICMS:t==='servico'?0:r2(aliq),aliqISS:t==='servico'?r2(aliqIss):0,
+          pctST:r2(rec?Y.st/rec*100:0),pctMono:r2(rec?Y.mono/rec*100:0),pctExp:r2(rec?Y.exp/rec*100:0),pctB2B:0,red:0}});
+      for(const a of [2026,2027])N.anos[a].ativ=JSON.parse(JSON.stringify(ativ));
+    }
+    for(const a of [2026,2027]){const y=N.anos[a];
+      y.compras=r2(Y.comprasTot*f);
+      y.icmsCred=r2((Y.icmsCred+Y.freteIcms)*f);
+      y.baseCredPC=r2((Y.baseCredPC+Y.servTom+Y.frete-Y.freteIcms)*f);
+      y.baseCredCBS=r2((Y.baseCredCBS+Y.servTom-Y.servTomSimples+Y.frete-Y.freteSimples)*f);
+      y.despesas=r2((Y.uso+Y.servTom+Y.frete)*f);
+    }
+    if(!r&&st.ano==='2025'&&nm===12){N.histRec=r2(rec-dev);N.histRecMensal=[...Array(12)].map((_,i)=>{const m=String(i+1).padStart(2,'0');return ((Y.rec[m]||0)-(Y.devol[m]||0)).toFixed(2).replace('.',',')}).join('; ')}
+  }
+  S=N;
+  ui.msg='Documentos aplicados. O aviso amarelo em “Dados da empresa” lista só o que ainda falta e se aplica às suas atividades.';
   renderDados(); calcular(); setTab('rel'); window.scrollTo(0,0);
 }
-function ligaDrop(){
-  for(const [id,inp] of [['dropPg','pgFile'],['dropXml','xmlFiles']]){
-    const z=$('#'+id),f=$('#'+inp); if(!z||!f)continue;
-    ['dragenter','dragover'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.add('over')}));
-    ['dragleave','drop'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.remove('over')}));
-    z.addEventListener('drop',e=>{const fl=e.dataTransfer&&e.dataTransfer.files;if(!fl||!fl.length)return;try{f.files=fl}catch(x){return}f.onchange&&f.onchange()});
-  }
-}
-function ligaXml(){
-  const go=async files=>{
-    if(!files||!files.length)return;
-    const o=$('#xmlOut'); o.innerHTML='<p class="small" id="xmlProg">Lendo os arquivos…</p>';
+function ligaDocs(){
+  const f=$('#pgFile'); if(!f)return;
+  const novoXml=()=>({slots:Object.fromEntries(SLOTS.map(s=>[s.id,{docs:[]}])),cancel:new Set(),ign:{invalidos:0,nfse:0,nfseIlegivel:0,outros:0,eventos:0,naoXml:0},cnpj:'',ano:null,anual:false,docs:[]});
+  const procPg=txt=>{pgState=lerPGDAS(txt);ui.pgMeses=pgState&&!pgState.erro?pgState.meses:null;ui.docs=ui.docs||{};ui.docs.pg=pgState&&!pgState.erro?pgState:null;refreshImport()};
+  const ingestPg=async file=>{
+    if(!file)return; const o=$('#pgOut'); if(o)o.innerHTML='<p class="small">Lendo o arquivo…</p>';
+    try{procPg(/\.pdf$/i.test(file.name)||file.type==='application/pdf'?await pdfTexto(file):await file.text())}
+    catch(e){pgState={erro:'Não consegui ler o arquivo ('+(e&&e.message?e.message:'erro')+'). Abra o PDF, copie todo o texto (Ctrl+A, Ctrl+C) e cole na caixa “Ou colar o texto do extrato”.'};refreshImport()}
+  };
+  const ingestXml=async(slot,files)=>{
+    if(!files||!files.length)return; if(!xmlState||!xmlState.slots)xmlState=novoXml();
+    const o=$('#xmlOut'); if(o)o.innerHTML='<p class="small" id="xmlProg">Lendo os arquivos…</p>';
     try{
       const r=await lerArquivosXml([...files],(i,n)=>{const p=$('#xmlProg');if(p)p.textContent='Lendo '+i+' de '+n+'…'});
-      xmlState={docs:r.docs,cancel:r.cancel,ign:r.ign,cnpj:detectarCnpj(r.docs),ano:null,anual:false};
-    }catch(e){xmlState={erro:'Não consegui ler os arquivos ('+(e&&e.message?e.message:'erro')+').'}}
-    xmlRender();
+      r.docs.forEach(d=>d.slot=slot); xmlState.slots[slot].docs.push(...r.docs);
+      r.cancel.forEach(x=>xmlState.cancel.add(x)); for(const k of Object.keys(r.ign))xmlState.ign[k]+=r.ign[k];
+      xmlState.erro=null;
+    }catch(e){xmlState.erro='Não consegui ler os arquivos ('+(e&&e.message?e.message:'erro')+').'}
+    refreshImport();
   };
-  const f=$('#xmlFiles'),d=$('#xmlDir'); if(!f)return;
-  f.onchange=()=>go(f.files); d.onchange=()=>go(d.files); xmlRender();
+  f.onchange=()=>ingestPg(f.files[0]);
+  $('#pgLer').onclick=()=>{const t=$('#pgTxt').value.trim();if(!t){pgState={erro:'Cole primeiro o texto do extrato.'};refreshImport();return}procPg(t)};
+  for(const s of SLOTS){
+    const a=$('#in-'+s.id),b=$('#fo-'+s.id); if(a)a.onchange=()=>ingestXml(s.id,a.files); if(b)b.onchange=()=>ingestXml(s.id,b.files);
+  }
+  document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.rm; if(id==='pgdas'){pgState=null;ui.pgMeses=null;if(ui.docs)ui.docs.pg=null}
+    else if(xmlState&&xmlState.slots){xmlState.slots[id].docs=[]; if(!SLOTS.some(s=>xmlState.slots[s.id].docs.length)){xmlState=null;if(ui.docs)ui.docs.xml=null}}
+    refreshImport();
+  });
+  const ap=$('#docsAplicar'); if(ap)ap.onclick=aplicarTudo;
+  // arrastar e soltar sobre cada linha
+  const rows=[['row-pgdas',files=>ingestPg(files[0])],...SLOTS.map(s=>['row-'+s.id,files=>ingestXml(s.id,files)])];
+  for(const [id,fn] of rows){
+    const z=$('#'+id); if(!z)continue;
+    ['dragenter','dragover'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.add('over')}));
+    ['dragleave','drop'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.remove('over')}));
+    z.addEventListener('drop',e=>{const fl=e.dataTransfer&&e.dataTransfer.files;if(fl&&fl.length)fn(fl)});
+  }
+  pgRender(); xmlRender();
 }
+function refreshImport(){const el=$('#impCard');if(!el)return;el.outerHTML=cardImport();ligaDocs()}
 
 /* ---------- Relatório analítico ---------- */
 const RELCSS=`body{font:14px/1.6 system-ui,Arial,sans-serif;color:#111;max-width:860px;margin:24px auto;padding:0 18px}h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:28px 0 10px;border-bottom:2px solid #d10f14;padding-bottom:4px}h3{font-size:14px;margin:18px 0 6px}table{border-collapse:collapse;width:100%;font-size:12.5px;margin:6px 0 12px}th,td{border:1px solid #ddd;padding:6px 8px;text-align:right}th:first-child,td:first-child{text-align:left}th{background:#f3f3f3;font-size:11px;text-transform:uppercase}.parecer{border-left:4px solid #999;background:#f6f6f6;padding:10px 14px;margin:10px 0}.parecer.ok{border-color:#127a45}.parecer.atencao{border-color:#c98a00}.parecer.risco{border-color:#b3261e}.tag{font-weight:700;margin-right:6px}.meta td:first-child{width:36%;font-weight:600}.small{font-size:12px;color:#555}.sig{margin-top:40px}.scroll{overflow:visible;border:0}tr.win td{font-weight:700;background:#fdecec}.rel-logo img{height:34px;width:auto;margin-right:10px;vertical-align:middle}.rel-logo .wm{height:30px}`;
@@ -1191,7 +1292,7 @@ function montarRelatorio(){
   const d=ui.docs||{},pg=d.pg,xm=d.xml,agora=new Date();
   const {f,crit}=faltasDados(); let h='',nsec=0;
   const sec=t=>{nsec++;return `<h2>${nsec}. ${t}</h2>`};
-  const fontes=[pg?'extrato do PGDAS-D (PA '+String(pg.pa.mes).padStart(2,'0')+'/'+pg.pa.ano+')':null,xm?xm.ndocs+' nota(s) fiscal(is) em XML':null].filter(Boolean);
+  const fontes=[pg?'extrato do PGDAS-D (PA '+String(pg.pa.mes).padStart(2,'0')+'/'+pg.pa.ano+')':null,xm?xm.ndocs+' documento(s) fiscal(is) em XML':null].filter(Boolean);
   const r26=R[2026],r27=R[2027].base;
   const rk26=ranking(r26),rk27=ranking(r27),w26=rk26[0],w27=rk27[0];
   const ws=Object.keys(R[2027]).map(k=>ranking(R[2027][k])[0].nome),igual=ws.every(x=>x===ws[0]);
@@ -1199,6 +1300,13 @@ function montarRelatorio(){
   const estavel=est.every(([,n])=>n===w27.nome);
   h+=`<div class="rel-logo">${relLogo()}</div><h1>Relatório analítico de planejamento tributário</h1><p class="small">Emitido em ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · Exercícios de 2026 e 2027 · Fontes: ${fontes.length?fontes.join('; '):'dados digitados manualmente'}</p>`;
   if(S.example)h+=parecer('atencao','Este relatório usa os <strong>dados de exemplo fictícios</strong> do programa. Não tem valor para nenhuma empresa real.');
+  /* documentos */
+  h+=sec('Documentos considerados');
+  {const dc=docsContagem(),nomes={pgdas:'Extrato do PGDAS-D',saida:'Notas de saída e serviços prestados',entrada:'Notas de entrada',tomados:'Notas de serviços tomados',cte:'CT-e (frete)'},
+   efeito={pgdas:'sem o extrato não há conferência da receita declarada nem do DAS',saida:'sem notas de saída não é possível estimar as segregações (ST, monofásico, exportação) nem a receita por atividade',entrada:'sem notas de entrada, compras e créditos de ICMS, PIS/COFINS e CBS ficam por informar',tomados:'sem serviços tomados, as despesas e os créditos sobre serviços ficam por informar, o que pesa no Lucro Real',cte:'sem CT-e, os fretes e seus créditos não entram na análise'};
+   h+=`<div class="scroll"><table><thead><tr><th>Documento</th><th>Situação</th></tr></thead><tbody>${Object.keys(nomes).map(k=>`<tr><td>${nomes[k]}</td><td class="n">${k==='pgdas'?(dc[k]?'Anexado':'Não anexado'):(dc[k]?dc[k]+' documento(s)':'Não anexado')}</td></tr>`).join('')}</tbody></table></div>`;
+   const falta=Object.keys(nomes).filter(k=>!dc[k]);
+   h+=falta.length?parecer('atencao',`Não foram anexados: ${falta.map(k=>nomes[k]).join('; ')}. Consequências: ${falta.map(k=>efeito[k]).join('; ')}.`):parecer('ok','Todos os documentos do checklist foram anexados.');}
   /* 1 resumo */
   h+=sec('Resumo e parecer conclusivo');
   if(crit.length){
@@ -1231,7 +1339,7 @@ function montarRelatorio(){
   else{
     const Y=xm.Y,ms=[...Array(12)].map((_,i)=>String(i+1).padStart(2,'0')).filter(m=>Y.meses.has(m)),pgm=pg?pg.meses:null;
     const liq=m=>(Y.rec[m]||0)-(Y.devol[m]||0);
-    h+=`<h3>3.1 Receita mensal: notas × declaração</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Receita nas notas (líquida)</th>${pgm?'<th>Receita declarada no PGDAS</th><th>Diferença</th>':''}</tr></thead><tbody>`;
+    h+=`<h3>4.1 Receita mensal: notas × declaração</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Receita nas notas (líquida)</th>${pgm?'<th>Receita declarada no PGDAS</th><th>Diferença</th>':''}</tr></thead><tbody>`;
     let maior=0,menor=0,nm=0,nM=0,comp=0;
     for(const m of ms){const v=liq(m),e=pgm?pgm[xm.ano+'-'+m]:undefined;let dd=null;if(e!==undefined){dd=v-e;comp++;if(dd>1){maior+=dd;nM++}else if(dd<-1){menor+=-dd;nm++}}
       h+=`<tr><td>${m}/${xm.ano}</td><td class="n">${brl2(v)}</td>${pgm?`<td class="n">${e===undefined?'—':brl2(e)}</td><td class="n">${dd===null?'—':brl2(dd)}</td>`:''}</tr>`}
@@ -1243,8 +1351,9 @@ function montarRelatorio(){
       if(nM)h+=parecer('risco',`Em ${nM} mês(es), as notas de saída superam a receita declarada em ${brl2(maior)} no total. Isso pode indicar receita não declarada ou diferença de competência. Antes de concluir, confira se notas de remessa, transferência ou outras operações foram classificadas como venda e se o regime de apuração (competência ou caixa) é o mesmo.`);
       if(nm)h+=parecer('atencao',`Em ${nm} mês(es), a receita declarada supera as notas lidas em ${brl2(menor)} no total. Pode faltar XML, haver receita de serviço (NFS-e) ou venda sem nota na comparação.`);
     }
-    if(xm.ign.nfse)h+=parecer('atencao',`${xm.ign.nfse} arquivo(s) de NFS-e foram ignorados: a receita de serviços não está nas notas lidas.`);
-    h+=`<h3>3.2 Segregações da receita (ICMS-ST, monofásico, exportação)</h3>`;
+    if(xm.ign.nfseIlegivel)h+=parecer('atencao',`${xm.ign.nfseIlegivel} NFS-e em layout que o programa não leu foram ignoradas: a receita de serviços pode estar incompleta nesta comparação.`);
+    if(Y.nPrest)h+=parecer('ok',`A receita das notas inclui ${Y.nPrest} NFS-e de serviços prestados, no valor de ${brl2(Y.servPrest)}.`);
+    h+=`<h3>4.2 Segregações da receita (ICMS-ST, monofásico, exportação)</h3>`;
     const stX=Y.st/(sum(Object.values(Y.rec))||1),moX=Y.mono/(sum(Object.values(Y.rec))||1),exX=Y.exp/(sum(Object.values(Y.rec))||1);
     h+=`<div class="scroll"><table><thead><tr><th>Item</th><th>Nas notas (${xm.ano})</th>${pg?'<th>No extrato (PA)</th>':''}</tr></thead><tbody>`;
     const tot=pg?sum(pg.blocos.map(b=>b.rev)):0,pS=pg&&tot?sum(pg.blocos.map(b=>b.st))/tot:null,pM=pg&&tot?sum(pg.blocos.map(b=>b.mono))/tot:null,pE=pg&&tot?sum(pg.blocos.map(b=>b.exp?b.rev:0))/tot:null;
@@ -1257,13 +1366,13 @@ function montarRelatorio(){
   /* 4 compras */
   h+=sec('Compras e créditos');
   if(xm){const Y=xm.Y,rec=sum(Object.values(Y.rec))||1;
-    h+=`<div class="scroll"><table><tbody><tr><td>Compras de insumos e revenda (valor da nota)</td><td class="n">${brl2(Y.comprasTot)} (${pc(Y.comprasTot/rec,1)} da receita bruta)</td></tr><tr><td>ICMS creditável nas entradas</td><td class="n">${brl2(Y.icmsCred)}</td></tr><tr><td>Base estimada de crédito de PIS/COFINS</td><td class="n">${brl2(Y.baseCredPC)} (crédito potencial de 9,25% no Lucro Real: ${brl2(Y.baseCredPC*.0925)})</td></tr><tr><td>Base de crédito de CBS/IBS (fornecedores do regime normal)</td><td class="n">${brl2(Y.baseCredCBS)}</td></tr><tr><td>Compras de fornecedores do Simples</td><td class="n">${brl2(Y.fornSimples)}</td></tr><tr><td>Uso e consumo / ativo imobilizado</td><td class="n">${brl2(Y.uso)} / ${brl2(Y.ativo)}</td></tr></tbody></table></div>`;
+    h+=`<div class="scroll"><table><tbody><tr><td>Compras de insumos e revenda (valor da nota)</td><td class="n">${brl2(Y.comprasTot)} (${pc(Y.comprasTot/rec,1)} da receita bruta)</td></tr><tr><td>ICMS creditável nas entradas</td><td class="n">${brl2(Y.icmsCred)}</td></tr><tr><td>Base estimada de crédito de PIS/COFINS</td><td class="n">${brl2(Y.baseCredPC)} (crédito potencial de 9,25% no Lucro Real: ${brl2(Y.baseCredPC*.0925)})</td></tr><tr><td>Base de crédito de CBS/IBS (fornecedores do regime normal)</td><td class="n">${brl2(Y.baseCredCBS)}</td></tr><tr><td>Compras de fornecedores do Simples</td><td class="n">${brl2(Y.fornSimples)}</td></tr><tr><td>Uso e consumo / ativo imobilizado</td><td class="n">${brl2(Y.uso)} / ${brl2(Y.ativo)}</td></tr><tr><td>Serviços tomados (NFS-e)</td><td class="n">${brl2(Y.servTom)}${Y.servTomSimples?' (de optantes do Simples: '+brl2(Y.servTomSimples)+')':''}</td></tr><tr><td>Fretes (CT-e)</td><td class="n">${brl2(Y.frete)} (ICMS creditável: ${brl2(Y.freteIcms)})</td></tr></tbody></table></div>`;
     const tc=Y.comprasTot+Y.fornSimples>0?Y.fornSimples/(Y.comprasTot+Y.uso):0;
     h+=parecer('atencao',`O Simples não gera crédito de ICMS nem de PIS/COFINS ao próprio contribuinte; os regimes Presumido e Real geram, e a CBS gera crédito em 2027. ${Y.fornSimples>0?`Compras de fornecedores do Simples (${brl2(Y.fornSimples)}) geram crédito limitado de CBS ao comprador, por isso ficaram fora da base.`:''} Os valores acima são estimativas feitas a partir de CFOP e CST das notas e devem ser conferidas por amostragem.`);
   }else h+=`<p>Sem XMLs de entrada. Informe compras e créditos manualmente ou envie as notas.</p>`;
   /* 5 comparativo */
   h+=sec('Comparativo entre regimes');
-  if(crit.length)h+=parecer('atencao','Valores preliminares: faltam dados essenciais (ver item 1). Não use este quadro para decidir.');
+  if(crit.length)h+=parecer('atencao','Valores preliminares: faltam dados essenciais (ver item 2). Não use este quadro para decidir.');
   h+=`<h3>2026 (aferição)</h3>`+tabelaAno(r26,2026);
   h+=`<h3>2027 (cenário base de CBS ${pc4(N.P.cbs.base)})</h3>`+tabelaAno(r27,2027);
   h+=`<h3>Sensibilidade</h3><div class="scroll"><table><thead><tr><th>Cenário (2027)</th><th>Regime vencedor</th><th>Resultado líquido</th></tr></thead><tbody>`+
@@ -1289,8 +1398,8 @@ function montarRelatorio(){
   if(!crit.length){
     if(w27.nome!=='simples')pas.push(`Avaliar a migração para ${REG[w27.nome]} em 2027: a saída do Simples deve ser comunicada até 31/01/2027 (LC 123/2006, arts. 30 e 31), e a opção pelo Presumido se faz com o primeiro pagamento de IRPJ do ano (Lei 9.718/1998, art. 13).`);
     else pas.push('Permanecer no Simples Nacional em 2027, acompanhando o crescimento da receita em relação ao limite e ao sublimite.');
-  }else pas.push('Completar os dados essenciais listados no item 1 e gerar o relatório novamente.');
-  pas.push('Conferir as divergências documentais do item 3 antes de qualquer decisão.');
+  }else pas.push('Completar os dados essenciais listados no item 2 e gerar o relatório novamente.');
+  pas.push('Conferir as divergências documentais do item 4 antes de qualquer decisão.');
   pas.push('Validar as premissas de ICMS, ISS, folha e créditos com o cliente.');
   pas.push('Revisar este relatório com o contador responsável e acompanhar a regulamentação da CBS e do IBS.');
   h+=`<ol class="tight">${pas.map(p=>'<li>'+esc(p)+'</li>').join('')}</ol>`;
@@ -1323,7 +1432,6 @@ function renderDados(){
   let h=`<h2>Dados da empresa</h2><p class="sub">Informe valores anuais em reais; percentuais em pontos (18 = 18%). Quando houver sazonalidade, cole 12 valores mensais no campo opcional da atividade. Nada é preenchido por suposição: o que ficar em branco vale zero e gera alerta.</p>`;
   {const fd=faltasDados(norm(S));const todos=[...fd.crit,...fd.f];if(todos.length&&!S.example)h+=`<div class="banner warn"><strong>Falta informar (só o que se aplica às suas atividades):</strong><ul class="tight" style="margin-top:8px">${todos.map(t=>'<li>'+esc(t)+'</li>').join('')}</ul></div>`}
   h+=cardImport();
-  h+=cardXml();
   h+=`<div class="card"><div class="k">Passo 2</div><h3 style="margin-top:4px">Parâmetros gerais</h3><div class="grid">`+
     fld('socios','Número de sócios',S.socios)+fld('pctDist','% do lucro distribuído',S.pctDist)+
     `<div><label for="f-contabil">Escrituração contábil completa (dividendos sem limite)</label><select id="f-contabil" data-p="contabil" data-b="1"><option value="1" ${S.contabil?'selected':''}>Sim</option><option value="0" ${!S.contabil?'selected':''}>Não</option></select></div>`+
@@ -1367,9 +1475,7 @@ function renderDados(){
   document.querySelectorAll('select[data-s]').forEach(s=>s.onchange=()=>{lerForm();renderDados()});
   $('#btnCalc').onclick=()=>{lerForm();calcular();setTab('res')};
   $('#btnEx').onclick=()=>{S=exemplo();renderDados();calcular()};
-  ligaPGDAS();
-  ligaXml();
-  ligaDrop();
+  ligaDocs();
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{lerForm();S.anos[b.dataset.add].ativ.push({nome:'Nova atividade',tipo:'comercio',anual:0,mensal:'',aliqICMS:0,aliqISS:0,pctST:0,pctMono:0,pctExp:0,pctB2B:0,red:0});S.example=false;renderDados()});
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{lerForm();const [a,i]=b.dataset.del.split(':');if(S.anos[a].ativ.length>1){S.anos[a].ativ.splice(+i,1);renderDados()}});
 }

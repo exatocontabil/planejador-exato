@@ -400,13 +400,13 @@ function exemplo(){
     compras:1100000*f,icmsCred:150000*f,baseCredPC:1000000*f,baseCredCBS:1150000*f,despesas:400000*f,adicoes:0,prejuizo:0,ipi:0,
     acess:{simples:18000,hibrido:30000,presumido:36000,real:72000}});
   return {example:true,socios:2,pctDist:100,contabil:true,icmsIntegra:true,
-    cbs:{baixo:8.2,base:8.8,alto:9.3},
+    cbs:{baixo:9.2,base:11.3,alto:12.0},
     histRec:2700000,histRecMensal:'',histFolha:580000,
     anos:{2026:y(1),2027:y(1.10)}};
 }
 let S=null;
 try{const sv=localStorage.getItem('planej_v1');if(sv)S=JSON.parse(sv)}catch(e){}
-if(!S||!S.anos)S=exemplo();
+if(!S||!S.anos||S.example)S=exemplo();
 let ui={tab:'res',cen:'base',anoEq:2027,modoEq:'rec'};
 
 function meses12(txt,anual){
@@ -491,7 +491,7 @@ function renderRes(){
     const rk=ranking(r),w=rk[0],seg=rk[1],sim=r.simples;
     const dif=seg?w.liq-seg.liq:0;
     let t=`<div class="card"><div class="k">Exercício ${ano}${ano===2027?' · cenário CBS '+ui.cen:''}</div><div class="big">${REG[w.nome]}</div>`;
-    t+=`<p class="num">Resultado líquido ${brl(w.liq)} · carga ${pc(w.cargaPct)} da receita</p>`;
+    t+=`<p>Resultado líquido <strong class="num">${brl(w.liq)}</strong> · carga <strong class="num">${pc(w.cargaPct)}</strong> da receita</p>`;
     if(seg)t+=`<p>Vantagem sobre ${REG[seg.nome]}: <strong class="num">${brl(dif)}</strong> (${pc(dif/r.A.rec)} da receita).</p>`;
     if(sim&&w.nome!=='simples')t+=`<p>Ganho frente ao Simples comum: <strong class="num">${brl(w.liq-sim.liq)}</strong>.</p>`;
     if(w.nome==='simples')t+=`<p><span class="tag good">Permanecer</span>O Simples comum tem o maior resultado líquido neste cenário.</p>`;
@@ -526,7 +526,7 @@ function renderRes(){
   h+=`<p class="small">Resultado líquido = receita − compras − despesas − pessoal (salários, pró-labore, FGTS) − encargos patronais − tributos − custo de obrigações acessórias, antes do IRPF dos sócios. IRRF sobre dividendos conforme Lei 15.270/2025 (parâmetro). Fórmulas e dados de cada linha estão na aba “Memória de cálculo”.</p>`;
   $('#p-res').innerHTML=h;
   const hoje=new Date();
-  $('#prazo').innerHTML=`<strong>Prazos (hoje, ${hoje.toLocaleDateString('pt-BR')}):</strong> a saída do Simples para vigorar em 01/01/2027 deve ser comunicada até 31/01/2027 (LC 123, art. 30, §1º, I e art. 31). A opção pelo Lucro Presumido se faz com o primeiro pagamento de IRPJ do ano e é irretratável no ano (Lei 9.718/1998, art. 13). A opção do Simples pelo regime regular de IBS/CBS depende de regulamento do CGSN: <em>confirme o prazo vigente, pois pode vencer antes de janeiro</em>.`;
+  $('#prazo').innerHTML=`<strong>Prazos (hoje, ${hoje.toLocaleDateString('pt-BR')}):</strong> a saída do Simples para vigorar em 01/01/2027 deve ser comunicada até 31/01/2027 (LC 123, art. 30, §1º, I e art. 31). A opção pelo Lucro Presumido se faz com o primeiro pagamento de IRPJ do ano e é irretratável no ano (Lei 9.718/1998, art. 13). <strong>Atenção:</strong> notícias indicam que o prazo para o Simples optar pelo regime regular de IBS/CBS em 2027 (híbrido) termina em <strong>30/10/2026</strong> (Res. CGSN 186/2026 e posteriores). <em>Não confirmado em texto oficial: verifique hoje no Portal do Simples Nacional.</em>`;
   document.querySelectorAll('#segCen button').forEach(b=>b.onclick=()=>{ui.cen=b.dataset.c;renderRes()});
 }
 
@@ -611,8 +611,9 @@ const LEGAL=[
  ['STF, RE 574.706 (Tema 69)','ICMS fora da base do PIS/COFINS','Vigente. ISS na base: situação a confirmar (modelo mantém ISS na base)','Média'],
  ['EC 132/2023, ADCT arts. 125–133','Teste 2026 (CBS 0,9%, IBS 0,1%), CBS plena e IBS 0,1% em 2027–2028, ICMS/ISS até 2032','Vigente; cronograma fixado','Baixa'],
  ['LC 214/2025 (e alterações posteriores, a confirmar)','Regime regular de IBS/CBS, créditos, reduções de alíquota, opção do Simples pelo regime regular','Vigente; regulamentos complementares em andamento','Média'],
- ['Resolução do Senado / cálculo do TCU para alíquota de referência da CBS 2027','Valor da alíquota usada nos cenários A/B/C','Pendente: os 3 valores do programa são hipóteses suas, não norma','Alta'],
- ['LC 123 alterada pela LC 214 e Resolução CGSN','Prazo e forma da opção do Simples pelo regime regular (híbrido); partilha da CBS no DAS em 2027','Regulamentação a confirmar','Alta'],
+ ['LC 214/2025 (TCU) e futura Resolução do Senado','Alíquota de referência da CBS em 2027','TCU calculou 11,3468% (11,3%) em 28/10/2026; falta a resolução do Senado (prazo citado entre 15 e 22/12/2026). Os 3 valores do programa são hipóteses suas','Alta'],
+ ['LC 123 alterada pela LC 214 e LC 227/2026; Resoluções CGSN (186/2026 e posteriores)','Prazo (notícias: 30/10/2026), período de efeito e desistência da opção do Simples pelo regime regular (híbrido)','Fontes divergem; não conferido no texto oficial','Alta'],
+ ['LC 227/2026 (anexos do Simples com colunas de CBS e IBS)','Partilha do DAS em 2027–2028: o programa trata a CBS como a antiga parcela PIS/COFINS, o que pode estar desatualizado','Não conferido no texto oficial; numeração dos anexos incerta nas fontes','Alta'],
  ['LC 214/2025 e EC 132','Se ICMS/ISS integram a base da CBS/IBS na transição (parâmetro no programa)','A confirmar no texto vigente','Média'],
  ['LC 214/2025 e EC 132','IPI zerado em 2027 salvo produtos concorrentes com a Zona Franca (campo “IPI líquido” é manual)','A confirmar por produto','Média'],
  ['Lei 15.270/2025','IRRF de 10% sobre dividendos acima de R$ 50 mil/mês por sócio; IRPF mínimo (não modelado)','Vigente a partir de 2026; regulamento da RFB a acompanhar','Média'],
@@ -645,7 +646,7 @@ function renderRisk(){
   </ul>`;
   h+=`<h3>Base legal e situação de cada norma</h3><div class="scroll"><table><thead><tr><th>Norma</th><th>Uso no cálculo</th><th>Situação</th><th>Incerteza</th></tr></thead><tbody>`+
     LEGAL.map(l=>`<tr><td style="white-space:normal;text-align:left">${esc(l[0])}</td><td style="white-space:normal;text-align:left">${esc(l[1])}</td><td style="white-space:normal;text-align:left">${esc(l[2])}</td><td><span class="tag ${l[3]==='Alta'?'bad':l[3]==='Média'?'warn':'good'}">${l[3]}</span></td></tr>`).join('')+`</tbody></table></div>`;
-  h+=`<p class="small">Tabelas e artigos foram escritos com base no conhecimento do autor do programa até meados de 2026. Antes de decidir, confira cada item contra o texto consolidado da norma e consulte o contador responsável. Este programa é apoio ao planejamento e não substitui parecer profissional.</p>`;
+  h+=`<p class="small">Tabelas e artigos foram escritos com base no conhecimento do autor do programa até meados de 2026 e NÃO foram conferidos no texto oficial consolidado (sites oficiais indisponíveis na última verificação). Antes de decidir, confira cada item contra o texto consolidado da norma e consulte o contador responsável. Este programa é apoio ao planejamento e não substitui parecer profissional.</p>`;
   $('#p-risk').innerHTML=h;
 }
 
@@ -660,7 +661,7 @@ function renderDados(){
     fld('socios','Número de sócios',S.socios)+fld('pctDist','% do lucro distribuído',S.pctDist)+
     `<div><label for="f-contabil">Escrituração contábil completa (dividendos sem limite)</label><select id="f-contabil" data-p="contabil" data-b="1"><option value="1" ${S.contabil?'selected':''}>Sim</option><option value="0" ${!S.contabil?'selected':''}>Não</option></select></div>`+
     `<div><label for="f-icmsIntegra">ICMS e ISS integram a base da CBS/IBS (2027)</label><select id="f-icmsIntegra" data-p="icmsIntegra" data-b="1"><option value="1" ${S.icmsIntegra?'selected':''}>Sim (confirmar na LC 214)</option><option value="0" ${!S.icmsIntegra?'selected':''}>Não</option></select></div>`+
-    `</div><h3>Alíquota da CBS em 2027 (pendente de fixação oficial: informe três hipóteses)</h3><div class="grid">`+
+    `</div><h3>Alíquota da CBS em 2027 (ainda não fixada pelo Senado: informe três hipóteses)</h3><p class="small">Referência: o TCU calculou 11,3468% (11,3%) em 28/10/2026, pendente de resolução do Senado. O valor baixo (9,2%) é a estimativa anterior da Fazenda e o alto (12,0%) é só uma margem de segurança; ajuste como achar melhor.</p><div class="grid">`+
     fld('cbs.baixo','Cenário baixo (%)',S.cbs.baixo)+fld('cbs.base','Cenário base (%)',S.cbs.base)+fld('cbs.alto','Cenário alto (%)',S.cbs.alto)+
     `</div><h3>Histórico: 12 meses de 2025</h3><div class="grid">`+
     fld('histRec','Receita bruta total 2025 (R$)',S.histRec)+fld('histFolha','Folha 2025 para fator r (salários + pró-labore + FGTS, R$)',S.histFolha)+

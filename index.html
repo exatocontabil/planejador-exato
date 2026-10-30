@@ -404,6 +404,13 @@ table.wf tr.tot td{font-weight:700;background:var(--bg);padding-left:10px;paddin
 @media (max-width:560px){.stepper .sl{display:none}.stepper .sp{flex:1 1 100%}}
 @media (max-width:560px){.arow{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi .v{font-size:16px}.kpi{padding:12px}}
 @media (max-width:560px){.bar{grid-template-columns:1fr auto}.bar .t{grid-column:1/-1;order:3}.card{padding:18px;border-radius:16px}.regime{font-size:22px}.bignum{font-size:34px}}
+.opgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.op{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--surface);border-left:4px solid var(--warn)}
+.op.ok{border-left-color:var(--good)}.op.risco{border-left-color:var(--bad)}
+.op .opt{font-weight:700;font-size:14.5px;display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.op p{margin:0;font-size:13.5px;line-height:1.55}
+@media (max-width:760px){.opgrid{grid-template-columns:1fr}}
+@media print{.op{break-inside:avoid}}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Poppins:wght@500;600&display=swap">
@@ -448,7 +455,7 @@ table.wf tr.tot td{font-weight:700;background:var(--bg);padding-left:10px;paddin
 <script>
 /* ===================== MOTOR DE CÁLCULO (puro) ===================== */
 //CALC_START
-const LIM=4.8e6, SUB=3.6e6;
+const LIM=4.8e6, SUB=3.6e6, LC224_TRI=1.25e6;
 const TAB478={4:1,7:2,12:2};
 const CRED478={4:3,7:5,12:10};
 const sum=a=>a.reduce((s,v)=>s+v,0);
@@ -559,7 +566,7 @@ function indiretos(Y,A,P,ano,cbs,regime){
   if(temTtd){const cods=ttdIt.map(t=>t.cod).join(', '),btT=ttdIt.reduce((x,t)=>x+t.bt,0),bInt=Math.max(0,A.baseIcms-btT),dInt=A.icmsDeb-ttdRem;
     memo.push(`TTD ${cods}: somente as vendas interestaduais a consumidor final pagam a carga efetiva; as vendas dentro de SC não recebem o crédito presumido e são tributadas normalmente, com os créditos das entradas correspondentes; ICMS = ${brl2(A.icmsDeb-ttdRem)} (vendas sem TTD) + ${brl2(ttdTax)} (vendas interestaduais com TTD) + ${brl2(ttdFundo)} (FUMDES e FUNDOSOCIAL) − ${brl2(Y.icmsCred-ttdEst)} (crédito após estorno de ${brl2(ttdEst)}) = ${brl2(icmsBr)}; sem o TTD seria ${brl2(icmsSem)}.`);
     ln.push({t:'ICMS',base:A.baseIcms,al:pc(bInt>0?dInt/bInt:0)+' nas vendas dentro de SC (sem TTD)',calc:`Vendas dentro de SC: ${brl(bInt)} × ${pc(bInt>0?dInt/bInt:0)} = ${brl(dInt)}. Vendas interestaduais com TTD ${cods}: ${brl(btT)} pagam só a carga efetiva = ${brl(ttdTax)}. Créditos de entrada após estorno: −${brl(Y.icmsCred-ttdEst)}. Os fundos do TTD aparecem em linhas separadas`,v:icmsBr-ttdFundo,ref:'Legislação estadual; RICMS/SC, Anexo 2',f:'ICMS = débito das vendas sem TTD + ICMS das vendas com TTD − crédito das entradas (após estorno)',parts:[['Débito de ICMS nas vendas sem TTD (dentro de SC e demais, tributação normal)',A.icmsDeb-ttdRem],['(+) ICMS das vendas interestaduais com TTD (base × carga efetiva)',ttdTax],['(−) Crédito de ICMS das entradas, após estorno',-(Y.icmsCred-ttdEst)]]});
-    if(fUm>0)ln.push({t:'FUMDES (fundo do TTD '+cods+')',base:ttdIt.reduce((a,t)=>a+t.benLiq,0),al:pc(ttdIt[0].benLiq>0?fUm/ttdIt.reduce((a,t)=>a+t.benLiq,0):0),calc:`Contribuição obrigatória a quem adere ao TTD: percentual sobre o benefício líquido (crédito presumido menos o estorno de créditos de entrada)`,v:fUm,ref:'Termo de concessão do TTD; RICMS/SC, Anexo 2',f:'FUMDES = % × (crédito presumido − estorno de créditos)',parts:ttdIt.map(t=>['Benefício líquido do TTD '+t.cod,t.benLiq]).concat([['(−) Contribuição ao FUMDES',fUm]])});
+    if(fUm>0||P.ttd.some(t=>t.fundos>0))ln.push({t:'FUMDES (fundo do TTD '+cods+')',base:ttdIt.reduce((a,t)=>a+t.benLiq,0),al:pc(ttdIt[0].benLiq>0?fUm/ttdIt.reduce((a,t)=>a+t.benLiq,0):0),calc:fUm>0?`Contribuição obrigatória a quem adere ao TTD: percentual sobre o benefício líquido (crédito presumido menos o estorno de créditos de entrada)`:`Zero neste cenário: o estorno de créditos de entrada (${brl(ttdIt.reduce((a,t)=>a+t.est,0))}) é maior que o crédito presumido (${brl(ttdIt.reduce((a,t)=>a+t.ben,0))}), então não sobra benefício líquido para a contribuição`,v:fUm,ref:'Termo de concessão do TTD; RICMS/SC, Anexo 2',f:'FUMDES = % × (crédito presumido − estorno de créditos)',parts:ttdIt.map(t=>['Benefício líquido do TTD '+t.cod,t.benLiq]).concat([['(−) Contribuição ao FUMDES',fUm]])});
     if(fSo>0)ln.push({t:'FUNDOSOCIAL (fundo do TTD '+cods+')',base:ttdIt.reduce((a,t)=>a+t.bt,0),al:pc(ttdIt[0].fsoc>0?ttdIt[0].fsoc:0,2),calc:`Contribuição obrigatória a quem adere ao TTD: ${pc(ttdIt[0].fsoc>0?ttdIt[0].fsoc:0,2)} sobre ${ttdIt[0].fsocBase==='credito'?'o crédito presumido líquido':'a base das vendas beneficiadas'}`,v:fSo,ref:'Termo de concessão do TTD; RICMS/SC, Anexo 2',f:'FUNDOSOCIAL = % × base das vendas beneficiadas',parts:[['Vendas beneficiadas pelo TTD',ttdIt.reduce((a,t)=>a+t.bt,0)],['(=) FUNDOSOCIAL',fSo]]});
     ln.push({t:'Economia do TTD '+cods,base:null,al:'—',calc:`Economia = ICMS sem o TTD (${brl(icmsSem)}) − ICMS com o TTD (${brl(icmsBr)}). Não entra no total, pois já está refletida no ICMS`,v:0,ref:'RICMS/SC, Anexo 2',info:true,f:'Comparação do ICMS devido com e sem o tratamento tributário diferenciado',parts:[['ICMS sem o TTD',icmsSem],['ICMS com o TTD',icmsBr]],resLabel:'Economia no ano',resV:icmsSem-icmsBr});
   }
@@ -582,6 +589,7 @@ function indiretos(Y,A,P,ano,cbs,regime){
     memo.push(`Teste 2026 (informativo, sem efeito líquido): CBS 0,9% e IBS 0,1% sobre ${brl2(t)} ≈ ${brl2(t*.009)} e ${brl2(t*.001)}, compensáveis com PIS/COFINS devidos (EC 132, ADCT art. 125; LC 214/2025). Não somado ao custo.`);
     ln.push({t:'CBS/IBS (teste 2026)',base:t,al:'0,9% / 0,1%',calc:`≈ ${brl(t*.009)} e ${brl(t*.001)}, compensados com PIS/COFINS: sem custo adicional`,v:0,ref:'EC 132/2023, ADCT art. 125',f:'Teste de 2026: CBS 0,9% e IBS 0,1%, compensados com PIS/COFINS',parts:[['CBS de teste (0,9%)',t*.009],['IBS de teste (0,1%)',t*.001],['Efeito no custo',0]]});
   }else{
+    const cbsCen=cbs; cbs=cbsEfetiva(cbs,P);
     let deb=0,ibsDeb=0,bTot=0,rdMed=0;
     for(const x of Y.ativ){
       const T=TIPOS[x.tipo],r=sum(x.m); let b=r*(1-x.pctExp);
@@ -589,15 +597,17 @@ function indiretos(Y,A,P,ano,cbs,regime){
       deb+=b*(1-x.red)*cbs; ibsDeb+=b*(1-x.red)*.001; bTot+=b; rdMed+=b*x.red;
     }
     imp.CBS=Math.max(0,deb-cbs*Y.baseCredCBS); imp.IBS=Math.max(0,ibsDeb-.001*Y.baseCredCBS);
-    memo.push(`CBS = Σ base × (1−redução) × alíq. CBS − alíq. CBS × base de créditos = ${brl2(deb)} − ${pc4(cbs)} × ${brl2(Y.baseCredCBS)} = ${brl2(imp.CBS)}  (alíq. CBS do cenário: ${pc4(cbs)})`);
-    memo.push(`IBS 2027 (0,1%, ADCT art. 126, II) = ${brl2(ibsDeb)} − 0,1% × ${brl2(Y.baseCredCBS)} = ${brl2(imp.IBS)}  (sem compensação com CBS: ponto a confirmar na LC 214)`);
+    memo.push(`Alíquota da CBS aplicada = cenário ${pc4(cbsCen)}${P.red347?' − 0,10 p.p. (LC 214/2025, art. 347: redução em 2027 e 2028 para compensar o IBS de 0,1%)':''} = ${pc4(cbs)}`);
+    memo.push(`CBS = Σ base × (1−redução) × alíq. CBS − alíq. CBS × base de créditos = ${brl2(deb)} − ${pc4(cbs)} × ${brl2(Y.baseCredCBS)} = ${brl2(imp.CBS)}`);
+    memo.push(`IBS 2027 (0,05% estadual + 0,05% municipal = 0,1%; LC 214/2025, art. 344) = ${brl2(ibsDeb)} − 0,1% × ${brl2(Y.baseCredCBS)} = ${brl2(imp.IBS)}`);
     if(deb<cbs*Y.baseCredCBS)av.push('CBS: créditos superam débitos; saldo credor (ressarcimento) não considerado como caixa.');
-    memo.push(`Base da CBS/IBS ${P.icmsIntegra?'inclui':'exclui'} ICMS e ISS (parâmetro a confirmar). PIS/COFINS extintos a partir de 2027.`);
-    ln.push({t:'CBS',base:bTot,al:pc4(cbs)+(rdMed>0?' (com redução em parte da receita)':''),calc:`Débito de ${brl(deb)} menos crédito de ${brl(cbs*Y.baseCredCBS)} (${pc4(cbs)} × base de créditos de ${brl(Y.baseCredCBS)})`,v:imp.CBS,ref:'LC 214/2025; alíquota pendente do Senado',f:'CBS = base × alíquota − alíquota × base de créditos',parts:[['Base de cálculo (receita sem exportação)',bTot],['Alíquota da CBS (cenário)',cbs,'pct'],['Débito de CBS',deb],['(−) Crédito: alíquota × base de créditos',-cbs*Y.baseCredCBS]]},
-      {t:'IBS',base:bTot,al:'0,10%',calc:`Débito de ${brl(ibsDeb)} menos crédito de ${brl(.001*Y.baseCredCBS)}`,v:imp.IBS,ref:'EC 132/2023, ADCT art. 126',f:'IBS (0,1% em 2027) = base × 0,1% − 0,1% × base de créditos',parts:[['Base de cálculo',bTot],['Alíquota do IBS',.001,'pct'],['Débito de IBS',ibsDeb],['(−) Crédito',-.001*Y.baseCredCBS]]});
+    memo.push(`Base da CBS/IBS ${P.icmsIntegra?'inclui ICMS e ISS (cenário conservador escolhido)':'sem ICMS e ISS (LC 214/2025, art. 12, §2º, V: excluídos de 2026 a 2032)'}. PIS/COFINS extintos a partir de 2027.`);
+    ln.push({t:'CBS',base:bTot,al:pc4(cbs)+(rdMed>0?' (com redução em parte da receita)':''),calc:`Débito de ${brl(deb)} menos crédito de ${brl(cbs*Y.baseCredCBS)} (${pc4(cbs)} × base de créditos de ${brl(Y.baseCredCBS)})${P.red347?`. Alíquota = ${pc4(cbsCen)} do cenário − 0,1 p.p.`:''}`,v:imp.CBS,ref:'LC 214/2025, arts. 12 e 347; alíquota de referência pendente do Senado',f:'CBS = base × alíquota − alíquota × base de créditos',parts:[['Base de cálculo (receita sem exportação'+(P.icmsIntegra?')':', ICMS e ISS)'),bTot],['Alíquota da CBS do cenário',cbsCen,'pct']].concat(P.red347?[['(−) Redução de 2027 (art. 347)',-.001,'pct']]:[]).concat([['Débito de CBS',deb],['(−) Crédito: alíquota × base de créditos',-cbs*Y.baseCredCBS]])},
+      {t:'IBS',base:bTot,al:'0,10%',calc:`Débito de ${brl(ibsDeb)} menos crédito de ${brl(.001*Y.baseCredCBS)}`,v:imp.IBS,ref:'EC 132/2023; LC 214/2025, art. 344',f:'IBS (0,1% em 2027) = base × 0,1% − 0,1% × base de créditos',parts:[['Base de cálculo',bTot],['Alíquota do IBS',.001,'pct'],['Débito de IBS',ibsDeb],['(−) Crédito',-.001*Y.baseCredCBS]]});
   }
   return {imp,memo,av,ln,ttd:temTtd?{itens:ttdIt,economia:icmsSem-icmsBr,beneficio:ttdBen,cods:ttdIt.map(t=>t.cod).join(', ')}:null};
 }
+function cbsEfetiva(c,P){return Math.max(0,c-(P&&P.red347?.001:0))}
 function brl(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}).format(v)}
 function brl2(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2,maximumFractionDigits:2}).format(v)}
 function pc(v,d=2){return (v*100).toFixed(d).replace('.',',')+'%'}
@@ -612,7 +622,7 @@ function dividendos(res,Y,P,tipo){
   const dist=Math.max(0,res.liq)*P.pctDist;
   let limite=null,excesso=0;
   if(!P.contabil){
-    const pres=sum(Y.ativ.map(x=>sum(x.m)*TIPOS[x.tipo].irpj));
+    const pres=res.basePresIR!=null?res.basePresIR:sum(Y.ativ.map(x=>sum(x.m)*TIPOS[x.tipo].irpj));
     let ded=0;
     if(tipo==='presumido')ded=res.imp.IRPJ+res.imp.CSLL+(res.imp.PIS||0)+(res.imp.COFINS||0)+(res.imp.CBS||0)+(res.imp.IBS||0);
     else ded=res.imp.IRPJ||0;
@@ -621,29 +631,38 @@ function dividendos(res,Y,P,tipo){
   const mensal=dist/(12*Math.max(1,P.socios));
   const irrf=mensal>50000?.10*dist:0;
   res.dist=dist;res.limiteIsento=limite;res.excessoTrib=excesso;res.irrfDiv=irrf;res.liqPos=res.liq-irrf;
+  /* IRPF mínimo (IRPFM, Lei 15.270/2025): estimativa por sócio, só com pró-labore e dividendos desta empresa */
+  {const ns=Math.max(1,P.socios),renda=(Y.prol+dist)/ns,al=Math.min(.10,Math.max(0,renda/60000-10)/100);
+   const irPJ=(res.imp.IRPJ||0)+(res.imp.CSLL||0),lc=Math.max(1,res.liq+irPJ),efPJ=irPJ/lc;
+   const bruto=renda*al,red=(dist/ns)*Math.max(0,efPJ+al-.34),ret=irrf/ns,dev=Math.max(0,bruto-red-ret);
+   res.irpfm={renda,al,bruto,red,ret,efPJ,devSocio:dev,total:dev*ns};}
   res.memo.push(`Distribuição = ${pc(P.pctDist,0)} × resultado líquido = ${brl2(dist)}; por sócio/mês = ${brl2(mensal)}; IRRF 10% se > R$ 50.000/mês (Lei 15.270/2025) = ${brl2(irrf)}`+
     (limite!==null?`\nLimite isento sem escrituração contábil completa = receita × presunção − tributos dedutíveis = ${brl2(limite)}; excesso ${brl2(excesso)} (sujeito a IRPF na tabela progressiva, NÃO calculado)`:''));
   return res;
 }
 function calcPresumido(Y,A,P,ano,cbs){
   const ind=indiretos(Y,A,P,ano,cbs,'presumido'); const imp=Object.assign({},ind.imp); const memo=ind.memo.slice(); const ln=ind.ln.slice();
-  let irpj=0,csll=0,bIs=0,bCs=0,adS=0;
+  let irpj=0,csll=0,bIs=0,bCs=0,adS=0,acI=0,acC=0;
   for(let q=0;q<4;q++){
-    let bI=0,bC=0;
-    for(const x of Y.ativ){const T=TIPOS[x.tipo],rq=sum(x.m.slice(q*3,q*3+3)); bI+=rq*T.irpj; bC+=rq*T.csll}
+    let bI=0,bC=0,rqT=0;
+    for(const x of Y.ativ)rqT+=sum(x.m.slice(q*3,q*3+3));
+    /* LC 224/2025, art. 4º, §§4º e 5º: presunção +10% sobre a receita que passar de R$ 1,25 mi no trimestre (R$ 5 mi/ano); CSLL só a partir de abr/2026 */
+    const fx=P.lc224&&rqT>LC224_TRI?(rqT-LC224_TRI)/rqT:0,fxC=(ano===2026&&q===0)?0:fx;
+    for(const x of Y.ativ){const T=TIPOS[x.tipo],rq=sum(x.m.slice(q*3,q*3+3)); bI+=rq*T.irpj*(1+.1*fx); bC+=rq*T.csll*(1+.1*fxC); acI+=rq*T.irpj*.1*fx; acC+=rq*T.csll*.1*fxC}
     const ad=.10*Math.max(0,bI-60000);
     irpj+=.15*bI+ad; csll+=.09*bC; bIs+=bI; bCs+=bC; adS+=ad;
-    memo.push(`T${q+1}: base IRPJ = Σ receita × presunção = ${brl2(bI)};  IRPJ = 15% × base + 10% × (base − 60.000) = ${brl2(.15*bI)} + ${brl2(ad)};  base CSLL = ${brl2(bC)};  CSLL = 9% × base = ${brl2(.09*bC)}`);
+    memo.push(`T${q+1}: base IRPJ = Σ receita × presunção${fx>0?' (+10% sobre a receita acima de R$ 1,25 mi no trimestre, LC 224/2025)':''} = ${brl2(bI)};  IRPJ = 15% × base + 10% × (base − 60.000) = ${brl2(.15*bI)} + ${brl2(ad)};  base CSLL = ${brl2(bC)};  CSLL = 9% × base = ${brl2(.09*bC)}`);
   }
   imp.IRPJ=irpj; imp.CSLL=csll;
+  if(acI+acC>0)memo.push(`LC 224/2025: acréscimo de base de ${brl2(acI)} no IRPJ e ${brl2(acC)} na CSLL (receita acima de R$ 5 mi/ano, rateada por trimestre). Há liminares individuais e ADIs no STF (7.936, 7.944, 7.982) sem suspensão geral.`);
   const p=pessoal(Y);
   memo.push(`Encargos patronais fora da guia única: 20% × (salários + pró-labore) + (RAT + terceiros) × salários = ${brl2(.20*(Y.sal+Y.prol))} + ${brl2((Y.rat+Y.terc)*Y.sal)} = ${brl2(p.encReg)}`);
-  ln.push({t:'IRPJ',base:bIs,al:'15% (+10% sobre o que passar de R$ 60 mil por trimestre)',calc:`15% × ${brl(bIs)} = ${brl(.15*bIs)}, mais adicional de ${brl(adS)}`,v:irpj,ref:'Lei 9.249/1995, arts. 3º e 15',f:'IRPJ = 15% × base presumida + 10% do que passar de R$ 60 mil por trimestre',parts:[['Base presumida (soma dos trimestres)',bIs],['IRPJ de 15%',.15*bIs],['Adicional de 10% sobre o excesso',adS]]},
-    {t:'CSLL',base:bCs,al:'9%',calc:`9% × ${brl(bCs)}`,v:csll,ref:'Lei 9.249/1995, art. 20',f:'CSLL = 9% × base presumida da CSLL',parts:[['Base presumida da CSLL',bCs],['Alíquota',.09,'pct']]},
+  ln.push({t:'IRPJ',base:bIs,al:'15% (+10% sobre o que passar de R$ 60 mil por trimestre)',calc:`15% × ${brl(bIs)} = ${brl(.15*bIs)}, mais adicional de ${brl(adS)}${acI>0?`. A base inclui ${brl(acI)} de acréscimo da LC 224/2025`:''}`,v:irpj,ref:'Lei 9.249/1995, arts. 3º e 15'+(acI>0?'; LC 224/2025, art. 4º':''),f:'IRPJ = 15% × base presumida + 10% do que passar de R$ 60 mil por trimestre',parts:[['Base presumida (soma dos trimestres)',bIs-acI]].concat(acI>0?[['(+) Acréscimo da LC 224/2025 (receita acima de R$ 5 mi/ano)',acI]]:[]).concat([['IRPJ de 15%',.15*bIs],['Adicional de 10% sobre o excesso',adS]])},
+    {t:'CSLL',base:bCs,al:'9%',calc:`9% × ${brl(bCs)}${acC>0?` (inclui ${brl(acC)} de acréscimo da LC 224/2025)`:''}`,v:csll,ref:'Lei 9.249/1995, art. 20'+(acC>0?'; LC 224/2025':''),f:'CSLL = 9% × base presumida da CSLL',parts:[['Base presumida da CSLL',bCs-acC]].concat(acC>0?[['(+) Acréscimo da LC 224/2025',acC]]:[]).concat([['Alíquota',.09,'pct']])},
     {t:'INSS patronal (CPP)',base:Y.sal+Y.prol,al:'20%',calc:'20% × (salários + pró-labore), fora do DAS',v:.20*(Y.sal+Y.prol),ref:'Lei 8.212/1991, art. 22',enc:true,f:'INSS patronal = 20% × (salários + pró-labore)',parts:[['Salários + pró-labore',Y.sal+Y.prol],['Alíquota',.20,'pct']]},
     {t:'RAT e terceiros',base:Y.sal,al:pc(Y.rat+Y.terc),calc:`RAT ${pc(Y.rat)} + terceiros ${pc(Y.terc)} sobre os salários`,v:(Y.rat+Y.terc)*Y.sal,ref:'Informado',enc:true,f:'RAT + terceiros = (RAT + terceiros) × salários',parts:[['Salários',Y.sal],['RAT + terceiros',Y.rat+Y.terc,'pct']]});
   const r=fechar('presumido',Y,A,imp,p.encReg,Y.acess.presumido,memo);
-  r.av=ind.av; r.linhas=ln; r.ttd=ind.ttd;
+  r.av=ind.av; r.linhas=ln; r.ttd=ind.ttd; r.basePresIR=bIs; r.lc224={irpj:acI,csll:acC};
   r.pres=Y.ativ.map(x=>{const T=TIPOS[x.tipo],rec=sum(x.m);return {nome:x.nome,rec,pi:T.irpj,pcs:T.csll,bi:rec*T.irpj,bc:rec*T.csll}});
   return dividendos(r,Y,P,'presumido');
 }
@@ -775,7 +794,7 @@ function exemplo(){
     salarios:480000*f,prolabore:120000,rat:1,terc:5.8,
     compras:1100000*f,icmsCred:150000*f,baseCredPC:1000000*f,baseCredCBS:1150000*f,despesas:400000*f,adicoes:0,prejuizo:0,ipi:0,
     acess:{simples:18000,hibrido:30000,presumido:36000,real:72000}});
-  return {example:true,ttd:{possui:'',itens:[],exclLucro:false},socios:2,pctDist:100,contabil:true,icmsIntegra:true,
+  return {example:true,ttd:{possui:'',itens:[],exclLucro:false},socios:2,pctDist:100,contabil:true,icmsIntegra:false,lc224:true,red347:true,rev:4,
     cbs:{baixo:9.2,base:11.3,alto:12.0},
     histRec:2700000,histRecMensal:'',histFolha:580000,
     anos:{2026:y(1),2027:y(1.10)}};
@@ -790,7 +809,7 @@ function meses12(txt,anual){
   return v.length===12?v:Array(12).fill(anual/12);
 }
 function norm(S){
-  const N={P:{socios:+S.socios||1,pctDist:(+S.pctDist||0)/100,contabil:!!S.contabil,icmsIntegra:!!S.icmsIntegra,cbs:{}},hist:{},anos:{}};
+  const N={P:{socios:+S.socios||1,pctDist:(+S.pctDist||0)/100,contabil:!!S.contabil,icmsIntegra:!!S.icmsIntegra,lc224:S.lc224!==false,red347:S.red347!==false,cbs:{}},hist:{},anos:{}};
   for(const k of ['baixo','base','alto'])N.P.cbs[k]=(+S.cbs[k]||0)/100;
   const T=S.ttd||{possui:'',itens:[]},pend=[],tiAll=(T.possui==='sim'&&Array.isArray(T.itens))?T.itens:[];
   N.P.ttd=tiAll.map(t=>{const tipo=t.tipo==='p478'?'p478':'manual',ai=(+t.aliqInter||7)/100;let c=(t.cargaEf===''||t.cargaEf==null)?null:(+t.cargaEf)/100;
@@ -901,6 +920,48 @@ function alavancas(N,ano,cb){
     if(sh>.05)out.push({k:'atencao',t:`<b>Fornecedores do Simples:</b> ${pc(sh,0)} das compras (${brl(Yx.fornSimples)}) vêm de fornecedores do Simples, que repassam pouco ou nenhum crédito. Trocar parte deles por fornecedores do regime normal aumenta o crédito de ICMS, e de CBS em 2027, e melhora o resultado do Presumido e do Real.`})}
   return out;
 }
+/* Oportunidades e alertas: insights práticos para o cliente, calculados com os números da empresa */
+function oportunidades(N,ano,cb){
+  const out=[],base=avaliarAno(N,ano,cb),rk=ranking(base),best=rk[0],Y=N.anos[ano],rec=base.A.rec,clone=()=>JSON.parse(JSON.stringify(N));
+  const add=(k,tit,t,v)=>out.push({k,tit,t,v});
+  /* 1. Fator r */
+  if(base.simples&&Y.ativ.some(x=>x.tipo==='serv_fr')&&base.S.frMin!==null){
+    const fr0=base.S.frMin;
+    const sim=d=>{const C=clone();for(const a of (ano===2027?[2026,2027]:[2026])){const y=C.anos[a];y.prol+=d;y.folhaFR=y.folhaFR.map(v=>v+d/12)}if(ano===2026)C.hist.fol=C.hist.fol.map(v=>v+d/12);return avaliarAno(C,ano,cb)};
+    if(fr0<.28){
+      let a=0,b=Math.max(1000,rec*.4);const ok=d=>sim(d).S.frMin>=.28;
+      if(ok(b)){for(let i=0;i<22;i++){const m=(a+b)/2;if(ok(m))b=m;else a=m}
+        const r2=sim(b),das0=base.simples.trib,das1=r2.simples.trib,eco=das0-das1,cus=b*.11,irMax=b*.275;
+        add(eco-cus-irMax>0?'ok':'atencao','Fator r: pró-labore e Anexo III',`Hoje o fator r fica entre ${pc(base.S.frMin)} e ${pc(base.S.frMax)} e parte dos serviços cai no Anexo V. Aumentar o pró-labore em cerca de <b>${brl(b)}</b> no ano (${brl(b/12)} por mês) leva o fator r a 28% e os serviços para o Anexo III: o DAS cai <b>${brl(eco)}</b>. Em troca, o sócio paga INSS de 11% sobre o acréscimo (até ${brl(cus)}, limitado ao teto do INSS) e IRPF pela tabela, de até 27,5% (até ${brl(irMax)}), que não incidiriam se o valor saísse como lucro. ${eco>cus+irMax?'Mesmo no pior caso de IRPF, compensa.':eco>cus?'Compensa se a alíquota marginal de IRPF do sócio for baixa: calcule com a renda dele.':'Não compensa: o custo para o sócio supera a economia no DAS.'} O efeito é gradual: o fator r de cada mês usa a folha dos 12 meses anteriores, por isso o aumento precisa valer desde já. (LC 123/2006, art. 18, §§5º-J e 5º-M.)`,eco)}
+      else add('atencao','Fator r abaixo de 28%',`O fator r fica entre ${pc(base.S.frMin)} e ${pc(base.S.frMax)} e os serviços pagam pelo Anexo V. Para chegar a 28% seria preciso um aumento de folha muito grande em relação à receita; confira se a folha informada está completa (salários, pró-labore, 13º, férias e FGTS).`)
+    }else if(fr0<.31)add('atencao','Fator r: folga pequena',`O fator r está em ${pc(fr0)} no mês mais baixo, só ${pc(fr0-.28)} acima de 28%. Se a folha cair (demissão, redução de pró-labore) ou a receita crescer mais que a folha, os serviços passam ao Anexo V, com alíquota bem maior. Acompanhe mês a mês antes de reduzir a folha.`);
+  }
+  /* 2. Sublimite e limite do Simples */
+  {const s=serieRbt(),mes=i=>MES[(i)%12]+'/'+(i<12?'26':'27'),iS=s.findIndex(v=>v>SUB),iL=s.findIndex(v=>v>LIM);
+   if(iL>=0)add('risco','Limite do Simples',`Pela projeção, a receita dos últimos 12 meses passa de R$ 4,8 mi em ${mes(iL)}. Acima do limite a empresa é excluída do Simples (LC 123/2006, art. 3º, §§9º e 9º-A; até 20% de excesso, a exclusão vale no ano seguinte). Planeje a saída com antecedência para escolher o regime, e não ser empurrado para ele.`);
+   else if(iS>=0){const r=avaliarAno(N,iS<12?2026:2027,iS<12?0:cb),sx=r.simples,fora=sx?(sx.imp.ICMS_fora_DAS||0)+(sx.imp.ISS_fora_DAS||0):0;
+     add('atencao','Sublimite de R$ 3,6 mi',`Pela projeção, a receita dos últimos 12 meses passa de R$ 3,6 mi em ${mes(iS)}. A partir daí o ICMS e o ISS saem do DAS e são pagos pelo regime normal${fora>0?` (cerca de ${brl(fora)} no ano de ${iS<12?2026:2027})`:''}, com mais obrigações (LC 123/2006, arts. 19 e 20). É um bom momento para comparar de novo os regimes.`)}
+   else{const mx=Math.max(...s);if(mx>.85*SUB)add('atencao','Perto do sublimite',`A receita dos últimos 12 meses chega a ${brl(mx)}, ${pc(mx/SUB,0)} do sublimite de R$ 3,6 mi. Um crescimento acima do projetado pode tirar o ICMS/ISS do DAS.`)}}
+  /* 3. Distribuição de lucros e IRPF mínimo */
+  {const w=best,ns=Math.max(1,N.P.socios),porM=w.dist/12/ns;
+   if(w.dist>0){
+     if(porM>50000)add('atencao','Dividendos: retenção de 10%',`No ${REG[w.nome]}, a distribuição prevista é de ${brl(porM)} por sócio por mês, acima de R$ 50 mil. Com isso a empresa retém 10% sobre o total pago no mês (Lei 15.270/2025), cerca de <b>${brl(w.irrfDiv)}</b> no ano. A retenção é antecipação: é descontada do IRPF mínimo anual do sócio.`,w.irrfDiv);
+     else add('ok','Dividendos: distribua todo mês',`No ${REG[w.nome]}, a distribuição prevista é de ${brl(porM)} por sócio por mês. Pagando até R$ 50 mil por mês a cada sócio não há retenção na fonte. Concentrar o pagamento (por exemplo, ${brl(w.dist/ns)} de uma vez) faria a empresa reter 10% sobre o total pago no mês (${brl(w.dist/ns*.1)} por sócio).`);
+     const m=w.irpfm;if(m&&m.renda>600000)add('atencao','IRPF mínimo dos sócios',`Cada sócio recebe cerca de ${brl(m.renda)} no ano (pró-labore + lucros desta empresa), acima de R$ 600 mil. Entra a tributação mínima da Lei 15.270/2025: alíquota de ${pc(m.al,1)} (sobe de 0% a 10% entre R$ 600 mil e R$ 1,2 mi), cerca de ${brl(m.bruto)} por sócio, menos a retenção já feita (${brl(m.ret)}) e o redutor que limita a carga somada da empresa e do sócio a 34% (${brl(m.red)}). Estimativa: <b>${brl(m.devSocio)}</b> por sócio na declaração. Não considera outras rendas nem o IR já pago sobre o pró-labore.`,m.total)}}
+  /* 4. Pró-labore x lucros nos regimes normais */
+  if((best.nome==='presumido'||best.nome==='real')&&Y.prol>0)add('atencao','Pró-labore no regime normal',`No ${REG[best.nome]} o INSS patronal de 20% sobre o pró-labore é pago por fora do imposto: o pró-labore de ${brl(Y.prol)} custa ${brl(.2*Y.prol)} por ano à empresa, além do INSS de 11% e do IRPF do sócio. Lucros distribuídos (dentro do limite de R$ 50 mil por mês por sócio) não têm esses custos. Manter o pró-labore num valor compatível com a função, e não acima, reduz a carga total.`,.2*Y.prol);
+  /* 5. LC 224 */
+  if(base.presumido&&base.presumido.lc224&&base.presumido.lc224.irpj+base.presumido.lc224.csll>0){const l=base.presumido.lc224;
+    add('atencao','LC 224/2025 no Presumido',`Como a receita passa de R$ 5 mi no ano, a presunção sobe 10% na parcela excedente: a base cresce ${brl(l.irpj)} no IRPJ e ${brl(l.csll)} na CSLL, cerca de ${brl(l.irpj*.25+l.csll*.09)} a mais de imposto. Há liminares individuais e ações no STF (ADIs 7.936, 7.944 e 7.982), sem suspensão geral.`)}
+  /* 6. Prejuízo fiscal */
+  if(base.real){const d=base.real.lrDet;
+    if(d.lr<0)add('atencao','Prejuízo fiscal',`No Lucro Real o ano fecha com prejuízo fiscal de ${brl(-d.lr)}: não há IRPJ nem CSLL, e o prejuízo pode abater até 30% do lucro dos anos seguintes, sem prazo (Lei 9.065/1995, art. 15). No Presumido e no Simples o imposto é devido mesmo com prejuízo.`);
+    else if(Y.prejuizo>0)add('ok','Prejuízo acumulado',`O prejuízo fiscal acumulado de ${brl(Y.prejuizo)} só é aproveitado no Lucro Real: neste ano abate ${brl(d.comp)} da base (limite de 30%), e sobram ${brl(Math.max(0,Y.prejuizo-d.comp))} para os próximos anos. Ficar fora do Real não faz perder o saldo, mas ele fica parado.`)}
+  /* 7. Imobilizado e créditos em 2027 */
+  if(ano===2027&&['presumido','real','hibrido'].includes(best.nome))add('ok','Compras de máquinas e equipamentos',`No ${REG[best.nome]}, a CBS paga na compra de máquinas, equipamentos e outros bens usados na atividade gera crédito na própria apuração (LC 214/2025, não cumulatividade ampla), sem a regra de 48 parcelas do PIS/COFINS. No Simples comum não há esse crédito. Se houver investimentos previstos, vale programá-los para depois da mudança de regime.`);
+  return out;
+}
+function cardOport(L){return `<div class="opgrid">${L.map(o=>`<div class="op ${o.k}"><div class="opt"><span class="dotk"></span>${o.tit}</div><p>${o.t}</p></div>`).join('')}</div>`}
 function linhaTabela(rk,x,win){
   const imp=x.imp;
   return `<tr class="${win?'win':''}"><td>${REG[x.nome]}</td><td class="n">${brl(x.trib)}</td><td class="n">${brl(x.enc)}</td><td class="n">${brl(x.carga)}</td><td class="n">${pc(x.cargaPct)}</td><td class="n">${brl(x.acess)}</td><td class="n">${brl(x.liq)}</td><td class="n">${brl(x.irrfDiv)}</td><td class="n">${brl(x.liqPos)}</td></tr>`;
@@ -929,7 +990,7 @@ function credCli(r,ano){
   let simples=0,reg=0;
   const pcDas=(r.simples.imp.CBS||0)+(r.simples.imp.PIS||0)+(r.simples.imp.COFINS||0);
   const tot=r.A.rec;
-  for(const x of Y.ativ){const rv=sum(x.m); const sh=rv/tot; simples+=pcDas*sh*x.pctB2B; reg+=rv*(1-x.pctExp)*(1-x.red)*cb*x.pctB2B}
+  for(const x of Y.ativ){const rv=sum(x.m); const sh=rv/tot; simples+=pcDas*sh*x.pctB2B; reg+=rv*(1-x.pctExp)*(1-x.red)*cbsEfetiva(cb,N.P)*x.pctB2B}
   return {simples,reg};
 }
 /* ---------- Painel ---------- */
@@ -1011,13 +1072,21 @@ function gauge(label,val,fmt,marks,max,tone){
   const pct=Math.min(100,val/max*100);
   return `<div class="gauge"><div class="gl"><span>${label}</span><b class="num">${fmt}</b></div><div class="gt"><div class="gf" style="width:${pct}%;background:var(--${tone})"></div>${marks.map(([v,l])=>`<span class="tk" style="left:${v/max*100}%"></span><span class="tkl" style="left:${v/max*100}%">${l}</span>`).join('')}</div></div>`;
 }
+function prazoHibrido(){
+  const d=new Date(),t=new Date(d.getFullYear(),d.getMonth(),d.getDate()),f=x=>new Date(x+'T00:00:00');
+  if(t<=f('2026-10-30'))return 'o prazo para valer em janeiro/2027 termina em 30/10/2026 (Resolução CGSN 194/2026). Quem optar pode cancelar de 3/11 a 20/12/2026.';
+  if(t<=f('2026-12-20'))return 'o prazo para valer em janeiro/2027 terminou em 30/10/2026. Quem já optou pode cancelar até 20/12/2026; quem não optou pode aderir na janela prevista para março/2027, com efeito no 2º semestre (Resolução CGSN 194/2026).';
+  if(t<=f('2027-03-31'))return 'a próxima janela de opção é março/2027, com efeito no 2º semestre de 2027 (confirme no Portal do Simples Nacional).';
+  return 'consulte no Portal do Simples Nacional a próxima janela de opção (as opções são semestrais).';
+}
 function marcos(){
   const hoje=new Date();
-  const L=[['2026-10-30','Opção do Simples pelo regime regular de IBS/CBS (híbrido)','Prazo citado em notícias (Res. CGSN 186/2026 e posteriores); confirmar no Portal do Simples Nacional.'],
-   ['2026-12-15','Senado fixa a alíquota de referência da CBS para 2027','Fontes citam entre 15 e 22/12/2026; o TCU calculou 11,3%.'],
-   ['2027-01-01','Início de 2027: CBS plena e PIS/COFINS extintos','EC 132/2023 e LC 214/2025.'],
-   ['2027-01-31','Último dia para comunicar a saída do Simples com efeitos em 01/01/2027','LC 123/2006, arts. 30 e 31.'],
-   ['2027-04-30','Primeiro pagamento de IRPJ do ano: opção pelo Presumido','Lei 9.718/1998, art. 13; data a confirmar (último dia útil de abril).']];
+  const L=[['2026-10-30','Último dia para o Simples optar pelo IBS/CBS no regime regular (híbrido) em 2027','Resolução CGSN 194/2026 (DOU de 28/09/2026).'],
+   ['2026-11-03','Abre o prazo para cancelar a opção pelo híbrido (até 20/12/2026)','Resolução CGSN 194/2026. Nova janela de opção prevista para março/2027, com efeito no 2º semestre.'],
+   ['2026-12-22','Prazo do Senado para fixar a alíquota de referência da CBS de 2027','Sem resolução até lá, vale a alíquota calculada pelo TCU (11,3%), conforme Agência Senado.'],
+   ['2027-01-01','Início de 2027: CBS plena, IBS de 0,1% e PIS/COFINS extintos','EC 132/2023 e LC 214/2025.'],
+   ['2027-01-29','Último dia útil para comunicar a saída do Simples com efeitos em 01/01/2027','LC 123/2006, art. 30, §1º, I; confirme o último dia útil de janeiro.'],
+   ['2027-04-30','Primeiro pagamento de IRPJ do ano: opção pelo Presumido','Lei 9.718/1998, art. 13, §1º (opção irretratável para o ano).']];
   return `<ul class="tl">${L.map(([d,t,s])=>{
     const t0=new Date(hoje.getFullYear(),hoje.getMonth(),hoje.getDate()),dd=Math.round((new Date(d+'T00:00:00')-t0)/864e5),tone=dd<0?'':dd<=7?'u':dd<=60?'a':'';
     const q=dd<0?'encerrado':dd===0?'hoje':dd===1?'amanhã':'em '+dd+' dias';
@@ -1042,10 +1111,10 @@ function renderRes(){
   /* o que fazer */
   const rbtM=r27.S.rbtMax,pas=[];
   if(crit.length){pas.push('Complete os dados que faltam, na aba “Dados da empresa”, para obter a resposta.');[...crit,...faltasDados(N).f].slice(0,4).forEach(t=>pas.push('· '+t.split(' · ')[0].replace(/\s*\(.*$/,'')))}
-  else if(w27.nome==='simples'){pas.push('Continue no Simples Nacional em 2027: não é preciso fazer nenhuma opção.');pas.push(`Acompanhe o limite: a RBT12 chega a ${brl(rbtM)}, ${pc(rbtM/LIM,0)} do limite de R$ 4,8 mi.`);pas.push('Reavalie quando o Senado fixar a alíquota da CBS (previsto para dezembro/2026).');if(r27.hibrido&&r27.simples&&r27.hibrido.liq>=r27.simples.liq*.97)pas.push('Se seus clientes são empresas, estude o regime híbrido: o prazo da opção citado em notícias é 30/10/2026 (confirmar no Portal do Simples).')}
-  else if(w27.nome==='hibrido'){pas.push('Faça a opção pelo regime regular de IBS/CBS dentro do Simples: o prazo citado em notícias é 30/10/2026 (confirmar no Portal do Simples).');pas.push('Revise com o contador as premissas de créditos e de clientes B2B.');pas.push('Reavalie quando o Senado fixar a alíquota da CBS.')}
-  else{pas.push('Confirme as premissas com o contador: folha, ICMS/ISS e créditos.');pas.push('Comunique a saída do Simples até 31/01/2027, para valer a partir de 01/01/2027.');pas.push(w27.nome==='presumido'?'Faça a opção pelo Presumido com o primeiro pagamento de IRPJ do ano (abril/2027).':'Prepare a escrituração contábil completa para o Lucro Real desde janeiro/2027.');pas.push('Reavalie quando o Senado fixar a alíquota da CBS.')}
-  const faz=`<div class="card"><div class="cardh"><div><h3>O que fazer agora</h3><p class="small">Passos sugeridos, na ordem.</p></div></div><ol class="todo">${pas.filter(p=>!p.startsWith('· ')).map(p=>'<li>'+esc(p)+'</li>').join('')}</ol>${pas.some(p=>p.startsWith('· '))?'<ul class="tight small" style="margin-top:10px">'+pas.filter(p=>p.startsWith('· ')).map(p=>'<li>'+esc(p.slice(2))+'</li>').join('')+'</ul>':''}<p class="small" style="margin-top:12px">Prazos legais e datas estão em “Prazos e marcos”, mais abaixo.</p></div>`;
+  else if(w27.nome==='simples'){pas.push('Continue no Simples Nacional em 2027: não é preciso fazer nenhuma opção.');pas.push(`Acompanhe o limite: a RBT12 chega a ${brl(rbtM)}, ${pc(rbtM/LIM,0)} do limite de R$ 4,8 mi.`);pas.push('Reavalie quando o Senado fixar a alíquota da CBS (prazo: 22/12/2026).');if(r27.hibrido&&r27.simples&&r27.hibrido.liq>=r27.simples.liq*.97)pas.push('Se a maior parte dos seus clientes são empresas, o híbrido fica perto: '+prazoHibrido())}
+  else if(w27.nome==='hibrido'){pas.push('Opção pelo regime regular de IBS/CBS dentro do Simples (híbrido): '+prazoHibrido());pas.push('Revise com o contador as premissas de créditos e de clientes B2B.');pas.push('Reavalie quando o Senado fixar a alíquota da CBS (prazo: 22/12/2026).')}
+  else{pas.push('Confirme as premissas com o contador: folha, ICMS/ISS e créditos.');pas.push('Comunique a saída do Simples até o último dia útil de janeiro/2027 (29/01/2027), para valer desde 01/01/2027 (LC 123/2006, art. 30).');pas.push(w27.nome==='presumido'?'Faça a opção pelo Presumido com o primeiro pagamento de IRPJ do ano (abril/2027).':'Prepare a escrituração contábil completa para o Lucro Real desde janeiro/2027.');pas.push('Reavalie quando o Senado fixar a alíquota da CBS (prazo: 22/12/2026).')}
+  const faz=`<div class="card"><div class="cardh"><div><h3>O que fazer agora</h3><p class="small">Passos sugeridos, na ordem.</p></div></div><ol class="todo">${pas.filter(p=>!p.startsWith('· ')).map(p=>'<li>'+esc(p)+'</li>').join('')}</ol>${pas.some(p=>p.startsWith('· '))?'<ul class="tight small" style="margin-top:10px">'+pas.filter(p=>p.startsWith('· ')).map(p=>'<li>'+esc(p.slice(2))+'</li>').join('')+'</ul>':''}<div class="k" style="margin:16px 0 8px">Prazos e marcos</div>${marcos()}</div>`;
   /* por que */
   const pq=[];
   if(s27){const cw=catImpostos(w27),cs=catImpostos(s27),lab=catNome(2027);
@@ -1057,7 +1126,8 @@ function renderRes(){
   const tpz=r27.presumido&&r27.presumido.ttd,trz=r27.real&&r27.real.ttd,tx=tpz||trz;
   const ttdB=tx?`<div class="banner" style="margin-bottom:16px"><b>TTD considerado: ${tx.cods}</b> (${tx.itens.map(i=>'TTD '+i.cod+': '+pc(i.pct,1)+' da receita de mercadorias').join('; ')}). Em 2027, o ICMS fica ${tpz?brl(tpz.economia)+' menor no Presumido':''}${tpz&&trz?' e ':''}${trz?brl(trz.economia)+' menor no Real':''} por ano. O benefício não vale no Simples, em que o ICMS vem dentro do DAS.</div>`:'';
   let alv='';try{const L=alavancas(N,2027,N.P.cbs.base);if(L.length&&!crit.length)alv=`<div class="card" style="margin-top:16px"><div class="cardh"><div><h3>O que faria o Presumido ou o Real valerem mais a pena</h3><p class="small">Alavancas em 2027, com os seus números.</p></div></div>${L.map(a=>parecer(a.k,a.t)).join('')}</div>`}catch(e){}
-  h+=`${ttdB}<div class="dgrid">${comp}${faz}</div>${porq}${alv}`;
+  let opo='';try{const L=oportunidades(N,2027,N.P.cbs.base);if(L.length&&!crit.length)opo=`<div class="card" style="margin-top:16px"><div class="cardh"><div><h3>Oportunidades e alertas para a sua empresa</h3><p class="small">Pontos práticos de 2027 (cenário base), calculados com os seus números.</p></div></div>${cardOport(L)}</div>`}catch(e){console.warn(e)}
+  h+=`${ttdB}<div class="dgrid">${comp}${faz}</div>${porq}${opo}${alv}`;
   h+=`<h2 style="margin-top:34px">Análise detalhada</h2><p class="sub" style="margin-bottom:16px">Gráficos, limites do Simples, prazos e tabelas completas para quem quer conferir os números.</p>`;
   h+=`<div class="dgrid">`;
   h+=`<div class="card"><div class="cardh"><div><h3>Resultado líquido por regime</h3><p class="small">Receita menos custos, folha e tributos, antes do IRPF dos sócios.</p></div></div>${chartResultado()}</div>`;
@@ -1065,7 +1135,6 @@ function renderRes(){
   const gr=(ano,r)=>gauge('RBT12 máximo em '+ano,r.S.rbtMax,brl(r.S.rbtMax),[[SUB,'3,6 mi'],[LIM,'4,8 mi']],LIM*1.15,r.S.rbtMax>LIM?'bad':r.S.rbtMax>SUB?'warn':'good');
   const fr=r=>r.S.frMin!==null?gauge('Fator r',r.S.frMax,pc(r.S.frMin)+' a '+pc(r.S.frMax),[[.28,'28%']],.5,r.S.frMax>=.28?'good':'warn'):'';
   h+=`<div class="card"><div class="cardh"><div><h3>Limites do Simples</h3><p class="small">Distância até o sublimite de ICMS/ISS e o limite de enquadramento.</p></div></div>${gr(2026,r26)}${gr(2027,r27)}${fr(r27)}${chartRbt()}<div class="legend"><span><i style="background:var(--accent)"></i>RBT12 mês a mês (jan/2026 a dez/2027)</span></div></div>`;
-  h+=`<div class="card"><div class="cardh"><div><h3>Prazos e marcos</h3><p class="small">Hoje: ${new Date().toLocaleDateString('pt-BR')}</p></div></div>${marcos()}</div>`;
   h+=`<div class="card"><div class="cardh"><div><h3>Quão firme é a conclusão</h3><p class="small">Regime vencedor de 2027 em cada teste.</p></div>${cf.t?`<span class="tag ${cf.k==='ok'?'good':cf.k==='warn'?'warn':'bad'}">${cf.t}</span>`:''}</div>`;
   if(cf.ws){const b=cf.base;h+=`<div class="tests">${cf.ks.map((k,i)=>`<div class="test ${cf.ws[i]===b?'ok':'diff'}"><span>CBS ${pc4(N.P.cbs[k])}</span><b>${REGC[cf.ws[i]]}</b></div>`).join('')}${cf.est.map(([l,n])=>`<div class="test ${n===b?'ok':'diff'}"><span>${l}</span><b>${REGC[n]}</b></div>`).join('')}</div><p class="small" style="margin-top:12px">${cf.igual&&cf.estavel?'O mesmo regime vence nos três cenários de alíquota da CBS e com variações de 10% em receita e custos.':'Há testes em que o vencedor muda: trate a conclusão com cautela e confirme as premissas.'}</p>`}
   else h+=`<p>Complete os dados para ver os testes de estabilidade.</p>`;
@@ -1240,7 +1309,7 @@ function renderMemo(){
     <tr class="tot"><td>= O que sobra por ano</td><td>${brl2(x.liq)}</td></tr>
     <tr><td>Distribuição aos sócios (${pc(N.P.pctDist,0)} do resultado)</td><td>${brl2(x.dist)}</td></tr>
     <tr><td>(−) IRRF de 10% sobre dividendos acima de R$ 50 mil/mês por sócio (Lei 15.270/2025)</td><td>${brl2(x.irrfDiv)}</td></tr>
-    <tr class="tot"><td>= Sobra após o IRRF dos dividendos</td><td>${brl2(x.liqPos)}</td></tr></tbody></table>${x.limiteIsento!==null&&x.limiteIsento!==undefined?`<p class="small" style="margin-top:8px">Sem escrituração contábil completa, o limite de dividendos isentos é ${brl2(x.limiteIsento)}; o excesso de ${brl2(x.excessoTrib)} seria tributado no IRPF (não calculado).</p>`:''}</div>`;
+    <tr class="tot"><td>= Sobra após o IRRF dos dividendos</td><td>${brl2(x.liqPos)}</td></tr></tbody></table>${x.limiteIsento!==null&&x.limiteIsento!==undefined?`<p class="small" style="margin-top:8px">Sem escrituração contábil completa, o limite de dividendos isentos é ${brl2(x.limiteIsento)}; o excesso de ${brl2(x.excessoTrib)} seria tributado no IRPF (não calculado).</p>`:''}${x.irpfm&&x.irpfm.renda>600000?`<p class="small" style="margin-top:8px"><b>IRPF mínimo (Lei 15.270/2025), estimativa por sócio:</b> renda desta empresa de ${brl2(x.irpfm.renda)} × alíquota de ${pc(x.irpfm.al,2)} = ${brl2(x.irpfm.bruto)}; (−) redutor de carga combinada acima de 34% ${brl2(x.irpfm.red)} (IRPJ/CSLL efetivos da empresa: ${pc(x.irpfm.efPJ,1)} do lucro); (−) IRRF retido ${brl2(x.irpfm.ret)} = <b>${brl2(x.irpfm.devSocio)}</b> a pagar na declaração. Pago pelo sócio, não entra no resultado da empresa.</p>`:''}</div>`;
   if(x.av&&x.av.length)h+=x.av.map(a=>`<div class="banner warn" style="margin-top:12px">${esc(a)}</div>`).join('');
   h+=`<details class="card tbl" style="margin-top:14px"><summary><span><b>Fórmulas em texto</b> <span class="small">· versão corrida, para conferência</span></span></summary><div><pre class="memo">${esc(x.memo.join('\n\n'))}</pre></div></details>`;
   $('#p-memo').innerHTML=h;
@@ -1251,22 +1320,23 @@ function renderMemo(){
 
 /* ---------- Riscos ---------- */
 const LEGAL=[
- ['LC 123/2006 com LC 155/2016 (Anexos I–V, art. 3º, 18, 19, 20)','Alíquotas, partilha, limite de R$ 4,8 mi e sublimite de R$ 3,6 mi para ICMS/ISS','Vigente','Baixa'],
+ ['LC 123/2006 com LC 155/2016 (Anexos I–V, art. 3º, 18, 19, 20)','Alíquotas, partilha, limite de R$ 4,8 mi e sublimite de R$ 3,6 mi para ICMS/ISS','Vigente. Anexos I e II conferidos com extratos reais do PGDAS; III, IV e V ainda não','Baixa'],
  ['LC 123/2006, art. 18, §§5º-J a 5º-M','Fator r (28%) e Anexo IV com CPP fora do DAS','Vigente','Baixa'],
  ['Lei 9.249/1995 (arts. 3º, 15, 20, 10); Lei 9.430/1996 (art. 1º, 25)','Presunção, adicional de 10%, CSLL, regra de dividendos isentos','Vigente','Baixa'],
+ ['LC 224/2025, art. 4º, §§4º e 5º','Lucro Presumido: presunção 10% maior (8% → 8,8%; 32% → 35,2%) sobre a receita acima de R$ 5 mi/ano (R$ 1,25 mi por trimestre); IRPJ desde jan/2026 e CSLL desde abr/2026','Vigente. ADIs 7.936, 7.944 e 7.982 no STF sem suspensão; liminares só para quem as obteve (TRF4 admitiu IRDR em 03/09/2026)','Média'],
  ['Lei 9.718/1998, art. 13','Opção pelo Presumido, irretratável no ano','Vigente','Baixa'],
  ['Lei 12.973/2014; Leis 10.637/2002 e 10.833/2003; Lei 9.065/1995','Lucro Real, PIS/COFINS não cumulativos até 2026, trava de 30% de prejuízo','Vigente','Baixa'],
+ ['Lei 14.789/2023 e STJ, Tema 1416','Crédito presumido de ICMS (TTD) na base do IRPJ/CSLL no Lucro Real: exclusão revogada desde 2024; crédito fiscal de 25% só para implantação ou expansão','STJ afetou o tema como repetitivo, sem julgamento de mérito. Programa não exclui por padrão','Média'],
  ['STF, RE 574.706 (Tema 69)','ICMS fora da base do PIS/COFINS','Vigente. ISS na base: situação a confirmar (modelo mantém ISS na base)','Média'],
- ['EC 132/2023, ADCT arts. 125–133','Teste 2026 (CBS 0,9%, IBS 0,1%), CBS plena e IBS 0,1% em 2027–2028, ICMS/ISS até 2032','Vigente; cronograma fixado','Baixa'],
- ['LC 214/2025 (e alterações posteriores, a confirmar)','Regime regular de IBS/CBS, créditos, reduções de alíquota, opção do Simples pelo regime regular','Vigente; regulamentos complementares em andamento','Média'],
- ['LC 214/2025 (TCU) e futura Resolução do Senado','Alíquota de referência da CBS em 2027','TCU calculou 11,3468% (11,3%) em 28/10/2026; falta a resolução do Senado (prazo citado entre 15 e 22/12/2026). Os 3 valores do programa são hipóteses suas','Alta'],
- ['LC 123 alterada pela LC 214 e LC 227/2026; Resoluções CGSN (186/2026 e posteriores)','Prazo (notícias: 30/10/2026), período de efeito e desistência da opção do Simples pelo regime regular (híbrido)','Fontes divergem; não conferido no texto oficial','Alta'],
- ['LC 227/2026 (anexos do Simples com colunas de CBS e IBS)','Partilha do DAS em 2027–2028: o programa trata a CBS como a antiga parcela PIS/COFINS, o que pode estar desatualizado','Não conferido no texto oficial; numeração dos anexos incerta nas fontes','Alta'],
- ['LC 214/2025 e EC 132','Se ICMS/ISS integram a base da CBS/IBS na transição (parâmetro no programa)','A confirmar no texto vigente','Média'],
+ ['EC 132/2023; LC 214/2025, arts. 344 e 347','Teste 2026 (CBS 0,9%, IBS 0,1%); em 2027 e 2028 IBS de 0,1% e CBS reduzida em 0,1 ponto; ICMS/ISS até 2032','Vigente; cronograma fixado','Baixa'],
+ ['LC 214/2025, art. 12, §2º, V','ICMS, ISS, PIS e COFINS fora da base da CBS e do IBS de 2026 a 2032','Vigente; o programa exclui por padrão (parâmetro permite o cenário conservador)','Baixa'],
+ ['LC 214/2025 (TCU) e Resolução do Senado','Alíquota de referência da CBS em 2027','TCU calculou 11,3% em 28/10/2026; o Senado tem até 22/12/2026 para fixá-la, senão vale a do TCU. Os 3 valores do programa são hipóteses','Alta'],
+ ['Resolução CGSN 194/2026 (e 186/2026)','Opção do Simples pelo regime regular de IBS/CBS (híbrido) para 2027','Opção até 30/10/2026; cancelamento de 3/11 a 20/12/2026; nova janela prevista para março/2027 (2º semestre)','Média'],
+ ['LC 123 alterada pela LC 214 e LC 227/2026 (anexos do Simples com CBS e IBS)','Partilha do DAS em 2027–2028: o programa trata a CBS como a antiga parcela de PIS/COFINS e não destaca o IBS de 0,1% no DAS','Não conferido no texto oficial','Alta'],
  ['LC 214/2025 e EC 132','IPI zerado em 2027 salvo produtos concorrentes com a Zona Franca (campo “IPI líquido” é manual)','A confirmar por produto','Média'],
- ['RICMS/SC, Anexo 2 (TTD) e termos de concessão da SEF-SC','TTD de Santa Catarina (por exemplo, o 478 do e-commerce): carga efetiva de ICMS, contrapartidas ao FUMDES e ao Fundo Social','Catálogo parcial, de fontes secundárias; confirmar no termo de concessão e no serviço “Consultar TTD”. O Decreto 1.416/2026 alterou regra de vedação ao crédito presumido','Alta'],
+ ['RICMS/SC, Anexo 2 (TTD) e termos de concessão da SEF-SC','TTD de Santa Catarina (por exemplo, o 478 do e-commerce): carga efetiva de ICMS, contrapartidas ao FUMDES e ao FUNDOSOCIAL','Catálogo parcial, de fontes secundárias; confirmar no termo de concessão e no serviço “Consultar TTD”','Alta'],
  ['LC 160/2017, Convênio ICMS 190/2017 e EC 132/2023','Benefícios de ICMS, inclusive TTD, acompanham a transição do ICMS (redução gradual a partir de 2029); o programa os aplica sem corte em 2026 e 2027','Calendário e regra por benefício a confirmar','Alta'],
- ['Lei 15.270/2025','IRRF de 10% sobre dividendos acima de R$ 50 mil/mês por sócio; IRPF mínimo (não modelado)','Vigente a partir de 2026; regulamento da RFB a acompanhar','Média'],
+ ['Lei 15.270/2025','IRRF de 10% sobre o total pago no mês quando passa de R$ 50 mil por sócio; IRPF mínimo anual (0% a 10% entre R$ 600 mil e R$ 1,2 mi) com redutor de carga combinada de 34%','Vigente desde 2026. O IRPF mínimo é estimado só com os rendimentos desta empresa','Média'],
  ['Lei 14.973/2024','Reoneração gradual da CPRB e da folha de setores desonerados (não modelada)','Vigente; checar se sua atividade era desonerada','Média']
 ];
 function renderRisk(){
@@ -1297,7 +1367,7 @@ function renderRisk(){
   {const ord={Alta:0,'Média':1,Baixa:2},ls=[...LEGAL].sort((a,b)=>ord[a[3]]-ord[b[3]]),n=g=>LEGAL.filter(l=>l[3]===g).length;
    h+=`<h3>Base legal e situação de cada norma</h3><div class="chips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><span class="tag bad">${n('Alta')} com incerteza alta</span><span class="tag warn">${n('Média')} com incerteza média</span><span class="tag good">${n('Baixa')} com incerteza baixa</span></div><div class="risks">`+
     ls.map(l=>`<div class="risk"><div class="top"><b>${esc(l[0])}</b><span class="tag ${l[3]==='Alta'?'bad':l[3]==='Média'?'warn':'good'}" style="margin:0">${l[3]}</span></div><div class="u">${esc(l[1])}</div><div class="sit"><strong>Situação:</strong> ${esc(l[2])}</div></div>`).join('')+`</div>`;}
-  h+=`<p class="small">Tabelas e artigos foram escritos com base no conhecimento do autor do programa até meados de 2026 e NÃO foram conferidos no texto oficial consolidado (sites oficiais indisponíveis na última verificação). Antes de decidir, confira cada item contra o texto consolidado da norma e consulte o contador responsável. Este programa é apoio ao planejamento e não substitui parecer profissional.</p>`;
+  h+=`<p class="small">Situação das normas conferida em 30/10/2026 em publicações especializadas e na Agência Senado (os portais oficiais de legislação não estavam acessíveis para leitura direta). Antes de decidir, confira cada item contra o texto consolidado da norma e consulte o contador responsável. Este programa é apoio ao planejamento e não substitui parecer profissional.</p>`;
   $('#p-risk').innerHTML=h;
 }
 
@@ -1419,7 +1489,7 @@ async function pdfTexto(file){
 }
 function vazio(){
   const y=()=>({ativ:[],salarios:0,prolabore:0,rat:0,terc:0,compras:0,icmsCred:0,baseCredPC:0,baseCredCBS:0,despesas:0,adicoes:0,prejuizo:0,ipi:0,acess:{simples:0,hibrido:0,presumido:0,real:0}});
-  return {example:false,ttd:S.ttd||{possui:'',itens:[],exclLucro:false},socios:S.socios||1,pctDist:S.pctDist||100,contabil:S.contabil,icmsIntegra:S.icmsIntegra,cbs:S.cbs,histRec:0,histRecMensal:'',histFolha:0,anos:{2026:y(),2027:y()}};
+  return {example:false,ttd:S.ttd||{possui:'',itens:[],exclLucro:false},socios:S.socios||1,pctDist:S.pctDist||100,contabil:S.contabil,icmsIntegra:S.icmsIntegra,lc224:S.lc224,red347:S.red347,rev:S.rev,cbs:S.cbs,histRec:0,histRecMensal:'',histFolha:0,anos:{2026:y(),2027:y()}};
 }
 const dig=s=>String(s||'').replace(/\D/g,'');
 const fmtCnpj=c=>c.length===14?c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'):c;
@@ -1862,7 +1932,7 @@ function montarRelatorio(){
   const nomesD={pgdas:'Extrato do PGDAS-D',saida:'Saída e serviços prestados',entrada:'Entrada',tomados:'Serviços tomados',cte:'CT-e'};
   h+=`<div class="k" style="margin-top:14px">Documentos analisados (${nD} de 5)</div><div class="dchips" style="margin-top:8px">${Object.keys(nomesD).map(k=>`<span class="dchip ${dcn[k]?'ok':''}">${dcn[k]?'✓':'—'} ${nomesD[k]}</span>`).join('')}</div>`;
   h+=`<div class="k" style="margin-top:14px">Sumário</div>@@TOC@@`;
-  h+=`<div class="vbox" style="margin-top:22px"><b>Escopo e ressalvas.</b> Este relatório foi gerado automaticamente a partir dos documentos e dos dados informados. Compara Simples Nacional, Lucro Presumido, Lucro Real e o regime híbrido de IBS/CBS em 2026 e 2027, com base na legislação conhecida até meados de 2026. Pontos que dependem de regulamentação, como a alíquota da CBS em 2027, estão sinalizados com o grau de incerteza. É uma minuta de apoio ao planejamento e não substitui o parecer do contador responsável.</div>`;
+  h+=`<div class="vbox" style="margin-top:22px"><b>Escopo e ressalvas.</b> Este relatório foi gerado automaticamente a partir dos documentos e dos dados informados. Compara Simples Nacional, Lucro Presumido, Lucro Real e o regime híbrido de IBS/CBS em 2026 e 2027, com a legislação conferida em 30/10/2026 (inclusive LC 224/2025, LC 214/2025, Lei 15.270/2025 e Resolução CGSN 194/2026). Pontos que dependem de regulamentação, como a alíquota da CBS em 2027, estão sinalizados com o grau de incerteza. É uma minuta de apoio ao planejamento e não substitui o parecer do contador responsável.</div>`;
   const gx=(ano,r)=>gauge('RBT12 máximo em '+ano,r.S.rbtMax,brl(r.S.rbtMax),[[SUB,'3,6 mi'],[LIM,'4,8 mi']],LIM*1.15,r.S.rbtMax>LIM?'bad':r.S.rbtMax>SUB?'warn':'good');
   h+=`<div class="pbreak"></div><h2 class="ph">Painel executivo</h2><div class="rgrid">
    <div class="rcard wide"><h4>Resultado líquido por regime</h4>${chartResultado('base')}</div>
@@ -1872,13 +1942,6 @@ function montarRelatorio(){
    <div class="rcard wide"><h4>Firmeza da conclusão</h4>${cf.ws?`<div class="tests">${cf.ks.map((k,i)=>`<div class="test ${cf.ws[i]===cf.base?'ok':'diff'}"><span>CBS ${pc4(N.P.cbs[k])}</span><b>${REGC[cf.ws[i]]}</b></div>`).join('')}${cf.est.map(([l,n])=>`<div class="test ${n===cf.base?'ok':'diff'}"><span>${l}</span><b>${REGC[n]}</b></div>`).join('')}</div>`:'<p class="small">Complete os dados para ver os testes de estabilidade.</p>'}</div>
   </div>`;
   if(S.example)h+=parecer('atencao','Este relatório usa os <strong>dados de exemplo fictícios</strong> do programa. Não tem valor para nenhuma empresa real.');
-  /* documentos */
-  h+=sec('Documentos considerados');
-  {const dc=docsContagem(),nomes={pgdas:'Extrato do PGDAS-D',saida:'Notas de saída e serviços prestados',entrada:'Notas de entrada',tomados:'Notas de serviços tomados',cte:'CT-e (frete)'},
-   efeito={pgdas:'sem o extrato não há conferência da receita declarada nem do DAS',saida:'sem notas de saída não é possível estimar as segregações (ST, monofásico, exportação) nem a receita por atividade',entrada:'sem notas de entrada, compras e créditos de ICMS, PIS/COFINS (até 2026) e CBS ficam por informar',tomados:'sem serviços tomados, as despesas e os créditos sobre serviços ficam por informar, o que pesa no Lucro Real',cte:'sem CT-e, os fretes e seus créditos não entram na análise'};
-   h+=`<div class="scroll"><table><thead><tr><th>Documento</th><th>Situação</th></tr></thead><tbody>${Object.keys(nomes).map(k=>`<tr><td>${nomes[k]}</td><td class="n">${k==='pgdas'?(dc[k]?'Anexado':'Não anexado'):(dc[k]?dc[k]+' documento(s)':'Não anexado')}</td></tr>`).join('')}</tbody></table></div>`+`<div class="scroll" style="margin-top:8px"><table><tbody><tr><td>TTD de Santa Catarina</td><td class="n">${(S.ttd&&S.ttd.possui==='sim'&&N.P.ttd.length)?N.P.ttd.map(t=>t.cod).join(', ')+' (considerado no Presumido e no Real)':S.ttd&&S.ttd.possui==='nao'?'Não possui':'Não informado'}</td></tr></tbody></table></div>`;
-   const falta=Object.keys(nomes).filter(k=>!dc[k]);
-   h+=falta.length?parecer('atencao',`Não foram anexados: ${falta.map(k=>nomes[k]).join('; ')}. Consequências: ${falta.map(k=>efeito[k]).join('; ')}.`):parecer('ok','Todos os documentos do checklist foram anexados.');}
   /* 1 resumo */
   h+=sec('Resumo e parecer conclusivo');
   if(crit.length){
@@ -1889,6 +1952,39 @@ function montarRelatorio(){
     const mig=w27.nome!=='simples';
     h+=parecer(mig?'atencao':'ok',`Para <strong>2027</strong>, no cenário base de CBS (${pc4(N.P.cbs.base)}), o regime de maior resultado líquido é <strong>${REG[w27.nome]}</strong>${r27.simples&&mig?`, com ganho de ${brl(w27.liq-r27.simples.liq)} sobre o Simples comum`:''}. ${igual?'O resultado se mantém nos três cenários de alíquota da CBS.':'O vencedor <strong>muda</strong> conforme a alíquota da CBS ('+Object.keys(R[2027]).map((k,i)=>pc4(N.P.cbs[k])+' → '+REG[ws[i]]).join('; ')+'): a decisão depende de definição ainda pendente.'} ${estavel?'Também se mantém com receita ou custos 10% acima ou abaixo.':'Não se mantém em todas as variações de 10% em receita e custos: a margem de segurança é curta.'} Para 2026, o regime de maior resultado foi ${REG[w26.nome]}; como as opções de 2026 já se encerraram, esse número serve de aferição.`);
   }
+  /* 8 conclusão */
+  h+=sec('O que fazer e quando');
+  const pas=[];
+  if(!crit.length){
+    if(w27.nome!=='simples')pas.push(w27.nome==='hibrido'?`Opção pelo regime regular de IBS/CBS dentro do Simples (híbrido): ${prazoHibrido()}`:`Avaliar a migração para ${REG[w27.nome]} em 2027: a saída do Simples deve ser comunicada até o último dia útil de janeiro/2027 (LC 123/2006, art. 30)${w27.nome==='presumido'?', e a opção pelo Presumido se faz com o primeiro pagamento de IRPJ do ano (Lei 9.718/1998, art. 13)':', com escrituração contábil completa desde janeiro'}.`);
+    else pas.push('Permanecer no Simples Nacional em 2027, acompanhando o crescimento da receita em relação ao limite e ao sublimite.');
+  }else pas.push('Completar os dados essenciais listados em “Riscos, premissas e limitações” e gerar o relatório novamente.');
+  pas.push('Conferir as divergências apontadas na conferência documental antes de qualquer decisão.');
+  pas.push('Validar as premissas de ICMS, ISS, folha e créditos com o cliente.');
+  pas.push('Revisar este relatório com o contador responsável e acompanhar a regulamentação da CBS e do IBS.');
+  h+=`<ol class="tight">${pas.map(p=>'<li>'+esc(p)+'</li>').join('')}</ol><div class="rcard" style="margin-top:12px"><h4>Prazos e marcos</h4>${marcos()}</div>`;
+  /* oportunidades */
+  {let L=[];try{L=oportunidades(N,2027,N.P.cbs.base)}catch(e){}
+   if(L.length&&!crit.length){h+=sec('Oportunidades e alertas para a empresa');h+=`<p class="small">Pontos práticos calculados com os números desta empresa (2027, cenário base de CBS).</p>`+cardOport(L)}}
+  /* 5 comparativo */
+  h+=sec('Comparativo entre regimes');
+  if(crit.length)h+=parecer('atencao','Valores preliminares: faltam dados essenciais (veja “Riscos, premissas e limitações”). Não use este quadro para decidir.');
+  h+=`<h3>2026 (aferição)</h3>`+tabelaAno(r26,2026);
+  h+=`<h3>2027 (cenário base de CBS ${pc4(N.P.cbs.base)})</h3>`+tabelaAno(r27,2027);
+  {const a=r27.presumido&&r27.presumido.ttd,b=r27.real&&r27.real.ttd,t=a||b;if(t)h+=parecer('atencao',`TTD considerado: ${t.cods} (${t.itens.map(i=>'TTD '+i.cod+': '+pc(i.pct,1)+' da receita de mercadorias').join('; ')}). Em 2027, o ICMS fica ${a?brl(a.economia)+' menor no Presumido':''}${a&&b?' e ':''}${b?brl(b.economia)+' menor no Real':''} por ano, com contrapartida a fundos já incluída. O benefício não se aplica ao Simples. As regras do TTD vêm de fontes secundárias e dependem do termo de concessão; os benefícios de ICMS também seguem a transição da reforma tributária.`)}
+  h+=`<h3>Sensibilidade</h3><div class="scroll"><table><thead><tr><th>Cenário (2027)</th><th>Regime vencedor</th><th>Resultado líquido</th></tr></thead><tbody>`+
+    Object.keys(R[2027]).map(k=>{const w=ranking(R[2027][k])[0];return `<tr><td>CBS ${pc4(N.P.cbs[k])}</td><td>${REG[w.nome]}</td><td class="n">${brl(w.liq)}</td></tr>`}).join('')+
+    est.map(([l,n])=>`<tr><td>${l} (CBS base)</td><td>${REG[n]}</td><td class="n">—</td></tr>`).join('')+`</tbody></table></div>`;
+  const dif=rk27[1]?(w27.liq-rk27[1].liq)/r27.A.rec:0;
+  h+=parecer(dif<.01?'atencao':'ok',`A diferença entre o primeiro e o segundo colocado em 2027 é de ${pc(dif)} da receita. ${dif<.01?'É uma diferença pequena: custos de transição, erros de estimativa ou mudanças de alíquota podem inverter a ordem.':'É uma diferença relevante, mas confirme as premissas antes de decidir.'}`);
+  /* alavancas */
+  {let L=[];try{L=alavancas(N,2027,N.P.cbs.base)}catch(e){}
+   if(L.length&&!crit.length){h+=sec('O que mudaria o resultado');h+=`<p class="small">Pontos que o cliente pode trabalhar para o Lucro Presumido ou o Lucro Real valerem mais a pena, calculados com os números desta empresa (2027, cenário base).</p>`+L.map(a=>parecer(a.k,a.t)).join('')}}
+  /* demonstrativo */
+  h+=sec('Demonstrativo dos tributos e alíquotas');
+  h+=`<p class="small">Cada tributo, com a base, a alíquota e o cálculo, para mostrar por que a carga de cada regime é a que é.</p><h3>Quadro comparativo de 2026 (aferição)</h3>${matrizImpostos(r26)}<h3>Quadro comparativo de 2027 (CBS ${pc4(N.P.cbs.base)})</h3>${matrizImpostos(r27)}<h3>O que mais pesa em 2027</h3><ul class="tight">${explicaCarga(r27,2027).map(t=>'<li>'+t+'</li>').join('')}</ul>`;
+  const kDet=[...new Set([w27.nome,'simples'])].filter(k=>r27[k]);for(const k of kDet){const x=r27[k];h+=`<h3>${REG[k]}${k===w27.nome?' (recomendado)':' (regime atual)'}: imposto por imposto em 2027</h3>${tabelaLinhas(x,r27.A.rec)}${extrasRegime(x,r27.A.rec,2027)}`}
+  const kAnexo=['simples','hibrido','presumido','real'].filter(k=>r27[k]&&!kDet.includes(k));
   /* 2 enquadramento */
   h+=sec('Enquadramento atual no Simples Nacional');
   const rbt=pg?pg.rbt12:(S.histRec||0);
@@ -1904,6 +2000,13 @@ function montarRelatorio(){
     for(const a of [2026,2027]){const r=a===2026?r26:r27;if(r.S.rbtMax>SUB)h+=parecer('atencao',`Em ${a}, a RBT12 passa de R$ 3.600.000 (máximo de ${brl(r.S.rbtMax)}): o ICMS/ISS passa a ser recolhido fora do DAS (LC 123, arts. 19 e 20), com mais obrigações acessórias.`);
       if(r.S.frMin!==null&&r.S.frMax<.28&&r.S.frMax>=.22)h+=parecer('atencao',`Em ${a}, o fator r fica entre ${pc(r.S.frMin)} e ${pc(r.S.frMax)}, perto do patamar de 28% (LC 123, art. 18, §5º-J): um pequeno aumento da folha pode levar a atividade do Anexo V para o Anexo III e reduzir a alíquota. Vale simular o planejamento da folha.`);}
   }else h+=`<p>Sem extrato do PGDAS-D nem histórico de receita informado.</p>`;
+  /* documentos */
+  h+=sec('Documentos considerados');
+  {const dc=docsContagem(),nomes={pgdas:'Extrato do PGDAS-D',saida:'Notas de saída e serviços prestados',entrada:'Notas de entrada',tomados:'Notas de serviços tomados',cte:'CT-e (frete)'},
+   efeito={pgdas:'sem o extrato não há conferência da receita declarada nem do DAS',saida:'sem notas de saída não é possível estimar as segregações (ST, monofásico, exportação) nem a receita por atividade',entrada:'sem notas de entrada, compras e créditos de ICMS, PIS/COFINS (até 2026) e CBS ficam por informar',tomados:'sem serviços tomados, as despesas e os créditos sobre serviços ficam por informar, o que pesa no Lucro Real',cte:'sem CT-e, os fretes e seus créditos não entram na análise'};
+   h+=`<div class="scroll"><table><thead><tr><th>Documento</th><th>Situação</th></tr></thead><tbody>${Object.keys(nomes).map(k=>`<tr><td>${nomes[k]}</td><td class="n">${k==='pgdas'?(dc[k]?'Anexado':'Não anexado'):(dc[k]?dc[k]+' documento(s)':'Não anexado')}</td></tr>`).join('')}</tbody></table></div>`+`<div class="scroll" style="margin-top:8px"><table><tbody><tr><td>TTD de Santa Catarina</td><td class="n">${(S.ttd&&S.ttd.possui==='sim'&&N.P.ttd.length)?N.P.ttd.map(t=>t.cod).join(', ')+' (considerado no Presumido e no Real)':S.ttd&&S.ttd.possui==='nao'?'Não possui':'Não informado'}</td></tr></tbody></table></div>`;
+   const falta=Object.keys(nomes).filter(k=>!dc[k]);
+   h+=falta.length?parecer('atencao',`Não foram anexados: ${falta.map(k=>nomes[k]).join('; ')}. Consequências: ${falta.map(k=>efeito[k]).join('; ')}.`):parecer('ok','Todos os documentos do checklist foram anexados.');}
   /* 3 conferência documental */
   h+=sec('Conferência documental');
   if(!pg&&!xm)h+=`<p>Nenhum documento foi enviado. Para a conferência, envie o extrato do PGDAS-D e os XMLs das notas fiscais.</p>`;
@@ -1911,7 +2014,7 @@ function montarRelatorio(){
   else{
     const Y=xm.Y,ms=[...Array(12)].map((_,i)=>String(i+1).padStart(2,'0')).filter(m=>Y.meses.has(m)),pgm=pg?pg.meses:null;
     const liq=m=>(Y.rec[m]||0)-(Y.devol[m]||0);
-    h+=`<h3>4.1 Receita mensal: notas × declaração</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Receita nas notas (líquida)</th>${pgm?'<th>Receita declarada no PGDAS</th><th>Diferença</th>':''}</tr></thead><tbody>`;
+    h+=`<h3>Receita mensal: notas × declaração</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Receita nas notas (líquida)</th>${pgm?'<th>Receita declarada no PGDAS</th><th>Diferença</th>':''}</tr></thead><tbody>`;
     let maior=0,menor=0,nm=0,nM=0,comp=0;
     for(const m of ms){const v=liq(m),e=pgm?pgm[xm.ano+'-'+m]:undefined;let dd=null;if(e!==undefined){dd=v-e;comp++;if(dd>1){maior+=dd;nM++}else if(dd<-1){menor+=-dd;nm++}}
       h+=`<tr><td>${m}/${xm.ano}</td><td class="n">${brl2(v)}</td>${pgm?`<td class="n">${e===undefined?'—':brl2(e)}</td><td class="n">${dd===null?'—':brl2(dd)}</td>`:''}</tr>`}
@@ -1926,7 +2029,7 @@ function montarRelatorio(){
     }
     if(xm.ign.nfseIlegivel)h+=parecer('atencao',`${xm.ign.nfseIlegivel} NFS-e em layout que o programa não leu foram ignoradas: a receita de serviços pode estar incompleta nesta comparação.`);
     if(Y.nPrest)h+=parecer('ok',`A receita das notas inclui ${Y.nPrest} NFS-e de serviços prestados, no valor de ${brl2(Y.servPrest)}.`);
-    h+=`<h3>4.2 Segregações da receita (ICMS-ST, monofásico, exportação)</h3>`;
+    h+=`<h3>Segregações da receita (ICMS-ST, monofásico, exportação)</h3>`;
     const stX=Y.st/(sum(Object.values(Y.rec))||1),moX=Y.mono/(sum(Object.values(Y.rec))||1),exX=Y.exp/(sum(Object.values(Y.rec))||1);
     h+=`<div class="scroll"><table><thead><tr><th>Item</th><th>Nas notas (${xm.ano})</th>${pg?'<th>No extrato (PA)</th>':''}</tr></thead><tbody>`;
     const tot=pg?sum(pg.blocos.map(b=>b.rev)):0,pS=pg&&tot?sum(pg.blocos.map(b=>b.st))/tot:null,pM=pg&&tot?sum(pg.blocos.map(b=>b.mono))/tot:null,pE=pg&&tot?sum(pg.blocos.map(b=>b.exp?b.rev:0))/tot:null;
@@ -1944,24 +2047,6 @@ function montarRelatorio(){
     const tc=Y.comprasTot+Y.fornSimples>0?Y.fornSimples/(Y.comprasTot+Y.uso):0;
     h+=parecer('atencao',`O Simples não gera crédito de ICMS nem de PIS/COFINS ao próprio contribuinte; os regimes Presumido e Real geram, e a CBS gera crédito em 2027. ${Y.fornSimples>0?`Compras de fornecedores do Simples (${brl2(Y.fornSimples)}) geram crédito limitado de CBS ao comprador, por isso ficaram fora da base.`:''} Os valores acima são estimativas feitas a partir de CFOP e CST das notas e devem ser conferidas por amostragem.`);
   }else h+=`<p>Sem XMLs de entrada. Informe compras e créditos manualmente ou envie as notas.</p>`;
-  /* 5 comparativo */
-  h+=sec('Comparativo entre regimes');
-  if(crit.length)h+=parecer('atencao','Valores preliminares: faltam dados essenciais (ver item 2). Não use este quadro para decidir.');
-  h+=`<h3>2026 (aferição)</h3>`+tabelaAno(r26,2026);
-  h+=`<h3>2027 (cenário base de CBS ${pc4(N.P.cbs.base)})</h3>`+tabelaAno(r27,2027);
-  {const a=r27.presumido&&r27.presumido.ttd,b=r27.real&&r27.real.ttd,t=a||b;if(t)h+=parecer('atencao',`TTD considerado: ${t.cods} (${t.itens.map(i=>'TTD '+i.cod+': '+pc(i.pct,1)+' da receita de mercadorias').join('; ')}). Em 2027, o ICMS fica ${a?brl(a.economia)+' menor no Presumido':''}${a&&b?' e ':''}${b?brl(b.economia)+' menor no Real':''} por ano, com contrapartida a fundos já incluída. O benefício não se aplica ao Simples. As regras do TTD vêm de fontes secundárias e dependem do termo de concessão; os benefícios de ICMS também seguem a transição da reforma tributária.`)}
-  h+=`<h3>Sensibilidade</h3><div class="scroll"><table><thead><tr><th>Cenário (2027)</th><th>Regime vencedor</th><th>Resultado líquido</th></tr></thead><tbody>`+
-    Object.keys(R[2027]).map(k=>{const w=ranking(R[2027][k])[0];return `<tr><td>CBS ${pc4(N.P.cbs[k])}</td><td>${REG[w.nome]}</td><td class="n">${brl(w.liq)}</td></tr>`}).join('')+
-    est.map(([l,n])=>`<tr><td>${l} (CBS base)</td><td>${REG[n]}</td><td class="n">—</td></tr>`).join('')+`</tbody></table></div>`;
-  const dif=rk27[1]?(w27.liq-rk27[1].liq)/r27.A.rec:0;
-  h+=parecer(dif<.01?'atencao':'ok',`A diferença entre o primeiro e o segundo colocado em 2027 é de ${pc(dif)} da receita. ${dif<.01?'É uma diferença pequena: custos de transição, erros de estimativa ou mudanças de alíquota podem inverter a ordem.':'É uma diferença relevante, mas confirme as premissas antes de decidir.'}`);
-  /* alavancas */
-  {let L=[];try{L=alavancas(N,2027,N.P.cbs.base)}catch(e){}
-   if(L.length&&!crit.length){h+=sec('O que mudaria o resultado');h+=`<p class="small">Pontos que o cliente pode trabalhar para o Lucro Presumido ou o Lucro Real valerem mais a pena, calculados com os números desta empresa (2027, cenário base).</p>`+L.map(a=>parecer(a.k,a.t)).join('')}}
-  /* demonstrativo */
-  h+=sec('Demonstrativo dos tributos e alíquotas');
-  h+=`<p class="small">Cada tributo, com a base, a alíquota e o cálculo, para mostrar por que a carga de cada regime é a que é.</p><h3>Quadro comparativo de 2026 (aferição)</h3>${matrizImpostos(r26)}<h3>Quadro comparativo de 2027 (CBS ${pc4(N.P.cbs.base)})</h3>${matrizImpostos(r27)}<h3>O que mais pesa em 2027</h3><ul class="tight">${explicaCarga(r27,2027).map(t=>'<li>'+t+'</li>').join('')}</ul>`;
-  for(const k of ['simples','hibrido','presumido','real']){const x=r27[k];if(!x)continue;h+=`<h3>${REG[k]}: imposto por imposto em 2027</h3>${tabelaLinhas(x,r27.A.rec)}${extrasRegime(x,r27.A.rec,2027)}`}
   /* 6 reforma */
   h+=sec('Reforma tributária e regime híbrido');
   const cb=N.P.cbs.base;
@@ -1969,22 +2054,13 @@ function montarRelatorio(){
   if(r27.simples&&r27.hibrido){const dh=r27.hibrido.liq-r27.simples.liq,cc=credCliRel(r27);
     h+=`<li>No híbrido (CBS/IBS pelo regime regular, com ICMS/ISS e demais tributos no DAS), o resultado líquido de 2027 é ${brl(r27.hibrido.liq)}, ${dh>=0?'superior':'inferior'} em ${brl(Math.abs(dh))} ao do Simples comum.</li>`;
     if(cc)h+=`<li>Os clientes B2B tomariam ${brl(cc.reg)} de crédito de CBS no híbrido contra ${brl(cc.simples)} no Simples comum. A diferença de ${brl(cc.reg-cc.simples)} é um argumento comercial, que este relatório não converte em receita.</li>`;}
-  h+=`<li>Notícias indicam que o prazo para o Simples optar pelo regime regular de IBS/CBS em 2027 termina em 30/10/2026 (Resolução CGSN 186/2026 e posteriores). Não foi confirmado em texto oficial: verifique no Portal do Simples Nacional.</li></ul>`;
+  h+=`<li>Opção do Simples pelo regime regular de IBS/CBS (híbrido): ${prazoHibrido()}</li><li>Em 2027 a CBS é reduzida em 0,1 ponto para compensar o IBS de 0,1% (LC 214/2025, arts. 344 e 347), e o ICMS e o ISS ficam fora da base da CBS e do IBS até 2032 (art. 12, §2º, V).</li></ul>`;
   /* 7 dados faltantes */
-  h+=sec('Dados faltantes e limitações');
+  h+=sec('Riscos, premissas e limitações');
   const lim=[...crit,...f,'O catálogo de TTD de Santa Catarina é parcial e vem de fontes secundárias: a lista oficial está no serviço “Consultar TTD” da SEF-SC e no RICMS/SC, Anexo 2. A carga efetiva e as contrapartidas precisam ser confirmadas no termo de concessão da empresa.','Os Anexos do Simples e as demais regras foram conferidos apenas contra o extrato do PGDAS-D enviado (Anexo I, 3ª faixa); os demais anexos ainda não foram validados com documentos reais.','A classificação de CFOP, CST e CSOSN das notas é feita por regras do programa e pode divergir do tratamento fiscal correto de cada produto.','Receita financeira, CPRB, incentivos, substituição tributária na entrada e regimes especiais não são modelados.','As regras da reforma tributária (LC 214/2025 e LC 227/2026) dependem de regulamentação em curso; consulte a aba “Riscos e base legal”.'];
-  h+=`<ul class="tight">${lim.map(l=>'<li>'+esc(l)+'</li>').join('')}</ul>`;
-  /* 8 conclusão */
-  h+=sec('Conclusão e providências');
-  const pas=[];
-  if(!crit.length){
-    if(w27.nome!=='simples')pas.push(`Avaliar a migração para ${REG[w27.nome]} em 2027: a saída do Simples deve ser comunicada até 31/01/2027 (LC 123/2006, arts. 30 e 31), e a opção pelo Presumido se faz com o primeiro pagamento de IRPJ do ano (Lei 9.718/1998, art. 13).`);
-    else pas.push('Permanecer no Simples Nacional em 2027, acompanhando o crescimento da receita em relação ao limite e ao sublimite.');
-  }else pas.push('Completar os dados essenciais listados no item 2 e gerar o relatório novamente.');
-  pas.push('Conferir as divergências documentais do item 4 antes de qualquer decisão.');
-  pas.push('Validar as premissas de ICMS, ISS, folha e créditos com o cliente.');
-  pas.push('Revisar este relatório com o contador responsável e acompanhar a regulamentação da CBS e do IBS.');
-  h+=`<ol class="tight">${pas.map(p=>'<li>'+esc(p)+'</li>').join('')}</ol>`;
+  h+=`<ul class="tight">${lim.map(l=>'<li>'+esc(l)+'</li>').join('')}</ul><h3>Normas com incerteza alta</h3><ul class="tight">${LEGAL.filter(l=>l[3]==='Alta').map(l=>'<li><b>'+esc(l[0])+':</b> '+esc(l[1])+'. '+esc(l[2])+'</li>').join('')}</ul>`;
+  /* anexo técnico */
+  if(kAnexo.length){h+=`<div class="pbreak"></div><h2 class="ph">Anexo técnico: demais regimes, imposto por imposto (2027)</h2><p class="small">Detalhe dos regimes que não foram recomendados, para conferência.</p>`;for(const k of kAnexo){const x=r27[k];h+=`<h3>${REG[k]}</h3>${tabelaLinhas(x,r27.A.rec)}${extrasRegime(x,r27.A.rec,2027)}`}}
   h+=`<div class="sig"><p class="small">Relatório gerado automaticamente pelo Planejador Tributário Exato, a partir dos documentos e dos dados informados. Trata-se de minuta de apoio ao planejamento, sujeita à revisão e à assinatura do responsável técnico.</p><p>Responsável técnico: ______________________________ &nbsp; CRC: ____________ &nbsp; Data: ___/___/______</p></div>`;
   h=h.replace('@@TOC@@','<ol class="toc">'+secs.map(s=>'<li>'+s+'</li>').join('')+'</ol>');
   return h;
@@ -2005,7 +2081,7 @@ function chartConf(Y,pgm,ano){
 function credCliRel(r){
   const Y=N.anos[2027],cb=N.P.cbs.base,tot=r.A.rec;let simples=0,reg=0;
   const pcDas=(r.simples.imp.CBS||0)+(r.simples.imp.PIS||0)+(r.simples.imp.COFINS||0);
-  for(const x of Y.ativ){const rv=sum(x.m);simples+=pcDas*(rv/tot)*x.pctB2B;reg+=rv*(1-x.pctExp)*(1-x.red)*cb*x.pctB2B}
+  for(const x of Y.ativ){const rv=sum(x.m);simples+=pcDas*(rv/tot)*x.pctB2B;reg+=rv*(1-x.pctExp)*(1-x.red)*cbsEfetiva(cb,N.P)*x.pctB2B}
   return (simples||reg)?{simples,reg}:null;
 }
 function renderRel(){
@@ -2037,9 +2113,11 @@ function restaurarDocs(sn){
   ui.slotSaved=sn.counts||null;
   if(typeof ttdAuto==='function'&&S&&S.ttd)ttdAuto();
 }
-const VERSAO_PROG='2026-10-30.17';
+const VERSAO_PROG='2026-10-30.18';
 function completarS(s){
   s.example=!!s.example;
+  /* rev 4 (30/10/2026): ICMS/ISS fora da base da CBS (LC 214, art. 12, §2º, V); LC 224 e redução do art. 347 ligadas */
+  if(!(s.rev>=4)){s.icmsIntegra=false;s.lc224=true;s.red347=true;if(s.ttd)s.ttd.exclLucro=false;s.rev=4}
   const base=exemplo();
   const fill=(a,b)=>{for(const k of Object.keys(b)){if(a[k]===undefined)a[k]=JSON.parse(JSON.stringify(b[k]));else if(b[k]&&typeof b[k]==='object'&&!Array.isArray(b[k])&&a[k]&&typeof a[k]==='object')fill(a[k],b[k])}};
   fill(s,base);
@@ -2227,7 +2305,7 @@ function cardTtd(){
         fld(p+'fundos',x.tipo==='p478'?'FUMDES (% sobre o benefício líquido: crédito presumido menos estorno de créditos)':'Contrapartida a fundos (% do benefício)',x.fundos)+(x.tipo==='p478'?fld(p+'fsoc','FUNDOSOCIAL (%)',(x.fsoc===''||x.fsoc==null)?0.4:x.fsoc)+`<div><label for="f-${p}fsocBase">Base do FUNDOSOCIAL</label><select id="f-${p}fsocBase" data-p="${p}fsocBase"><option value="venda" ${x.fsocBase!=='credito'?'selected':''}>Base de cálculo das vendas beneficiadas</option><option value="credito" ${x.fsocBase==='credito'?'selected':''}>Crédito presumido líquido</option></select></div>`:'')+
         `<div><label for="f-${p}estorna">Estorna créditos de entrada das mercadorias vendidas</label><select id="f-${p}estorna" data-p="${p}estorna" data-b="1"><option value="1" ${x.estorna?'selected':''}>Sim</option><option value="0" ${!x.estorna?'selected':''}>Não</option></select></div></div>
         <div class="small" style="max-width:80ch;margin-top:8px">${esc(x.nota||'')}<br><b>Referência:</b> ${esc(x.ref||'')}</div></details></div>`});
-    if(its.length)h+=`<div class="grid" style="margin-top:12px"><div><label for="f-ttd.exclLucro">Excluir o benefício da base do IRPJ e da CSLL no Lucro Real (subvenção para investimento)</label><select id="f-ttd.exclLucro" data-p="ttd.exclLucro" data-b="1"><option value="0" ${!t.exclLucro?'selected':''}>Não (mais conservador)</option><option value="1" ${t.exclLucro?'selected':''}>Sim, se cumpre as condições legais</option></select></div></div><p class="small">A exclusão exige o cumprimento das condições da LC 160/2017 (reserva de incentivos fiscais). Confirme com o contador.</p>`;
+    if(its.length)h+=`<div class="grid" style="margin-top:12px"><div><label for="f-ttd.exclLucro">Excluir o benefício da base do IRPJ e da CSLL no Lucro Real (subvenção para investimento)</label><select id="f-ttd.exclLucro" data-p="ttd.exclLucro" data-b="1"><option value="0" ${!t.exclLucro?'selected':''}>Não (padrão, conforme a Lei 14.789/2023)</option><option value="1" ${t.exclLucro?'selected':''}>Sim, só com decisão judicial favorável</option></select></div></div><p class="small">Desde 2024 a Lei 14.789/2023 revogou a exclusão de subvenções da base do IRPJ/CSLL (art. 30 da Lei 12.973/2014) e criou um crédito fiscal limitado a 25%, só para implantação ou expansão de empreendimento. O STJ vai decidir se o crédito presumido de ICMS ainda pode ser excluído (Tema 1416, repetitivo, sem julgamento de mérito). Use “Sim” apenas se a empresa tiver decisão favorável.</p>`;
     h+=`<p class="small" style="margin-top:12px">${esc(TTD_FONTE)}</p>`;
   }
   return h+`</div></details>`;
@@ -2282,7 +2360,9 @@ function renderDados(){
   h+=`<details class="card step" open><summary><div><div class="k">Passo 3</div><h3>Parâmetros gerais</h3></div><span class="st-chip ok">Pronto</span></summary><div class="stepbody"><div class="grid">`+
     fld('socios','Número de sócios',S.socios)+fld('pctDist','% do lucro distribuído',S.pctDist)+
     `<div><label for="f-contabil">Escrituração contábil completa (dividendos sem limite)</label><select id="f-contabil" data-p="contabil" data-b="1"><option value="1" ${S.contabil?'selected':''}>Sim</option><option value="0" ${!S.contabil?'selected':''}>Não</option></select></div>`+
-    `<div><label for="f-icmsIntegra">ICMS e ISS integram a base da CBS/IBS (2027)</label><select id="f-icmsIntegra" data-p="icmsIntegra" data-b="1"><option value="1" ${S.icmsIntegra?'selected':''}>Sim (confirmar na LC 214)</option><option value="0" ${!S.icmsIntegra?'selected':''}>Não</option></select></div>`+
+    `<div><label for="f-icmsIntegra">ICMS e ISS na base da CBS/IBS (2027)</label><select id="f-icmsIntegra" data-p="icmsIntegra" data-b="1"><option value="0" ${!S.icmsIntegra?'selected':''}>Fora da base (LC 214, art. 12, §2º, V)</option><option value="1" ${S.icmsIntegra?'selected':''}>Dentro da base (cenário conservador)</option></select></div>`+
+    `<div><label for="f-lc224">Lucro Presumido: acréscimo da LC 224/2025 (presunção +10% sobre a receita acima de R$ 5 mi/ano)</label><select id="f-lc224" data-p="lc224" data-b="1"><option value="1" ${S.lc224!==false?'selected':''}>Aplicar (lei vigente)</option><option value="0" ${S.lc224===false?'selected':''}>Não aplicar (empresa com liminar própria)</option></select></div>`+
+    `<div><label for="f-red347">CBS de 2027 com a redução de 0,1 ponto (LC 214, art. 347)</label><select id="f-red347" data-p="red347" data-b="1"><option value="1" ${S.red347!==false?'selected':''}>Sim (padrão)</option><option value="0" ${S.red347===false?'selected':''}>Não (se a alíquota informada já for a líquida)</option></select></div>`+
     `</div><h3>Alíquota da CBS em 2027 (ainda não fixada pelo Senado: informe três hipóteses)</h3><p class="small">Referência: o TCU calculou 11,3468% (11,3%) em 28/10/2026, pendente de resolução do Senado. O valor baixo (9,2%) é a estimativa anterior da Fazenda e o alto (12,0%) é só uma margem de segurança; ajuste como achar melhor.</p><div class="grid">`+
     fld('cbs.baixo','Cenário baixo (%)',S.cbs.baixo)+fld('cbs.base','Cenário base (%)',S.cbs.base)+fld('cbs.alto','Cenário alto (%)',S.cbs.alto)+
     `</div><h3>Histórico: 12 meses de 2025</h3><div class="grid">`+

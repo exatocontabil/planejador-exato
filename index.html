@@ -721,6 +721,7 @@ table.cmpt td,table.cmpt th{font-size:14.5px;padding:12px 14px}
 .rp-hero{background:#0b0b0c;color:#fff;border-radius:16px;padding:28px 30px;position:relative;overflow:hidden}
 .rp-hero::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;border-radius:50%;border:26px solid #d10f14}
 .rp-hero>*{position:relative;z-index:1}
+.rp-hero{padding-right:170px}
 .rp-hero-k{font:600 13px var(--sans);color:#ff5b55;margin:0}
 .rp-hero-r{font:700 44px/1.08 var(--sans);letter-spacing:-.03em;margin:6px 0 10px;max-width:14ch}
 .rp-hero-t{font-size:16px;line-height:1.55;color:#d6d8dc;max-width:52ch;margin:0 0 14px}
@@ -808,6 +809,23 @@ table.cmpt td,table.cmpt th{font-size:14.5px;padding:12px 14px}
   .rp-reg,.rp-op,.rp-step,.rp-tile,.rp-hero,.rp-tl-i,.rp-why li{break-inside:avoid}
   .rp-h{break-after:avoid}
 }
+/* ---- geração do PDF direto ---- */
+.pdfstage{position:fixed;left:-12000px;top:0;width:794px;z-index:-1;pointer-events:none}
+.rel.pdfmode{--bg:#ffffff;--surface:#ffffff;--ink:#16181c;--muted:#4b5058;--line:#d9dce1;--track:#e6e8ec;--tint:#f4f5f7;--accent:#d10f14;--soft:#fcebeb;--good:#13704a;--warn:#9a5b00;--bad:#b3191e;--goodbg:#e7f3ec;--warnbg:#fbf1df;--badbg:#fbe9e9;--wm-filter:none;--c1:#2f5d8c;--c2:#1f7a6d;--c3:#b7791f;--c4:#6b4c9a;--c5:#5c7a29;--c6:#7b828c;color-scheme:light;color:var(--ink);background:#fff;font-size:14px;line-height:1.5}
+.rel.pdfmode.sheet{width:794px;min-height:1123px;padding:56px 58px 76px;box-sizing:border-box;position:relative;background:#fff}
+.rel.pdfmode.sheet.cover{padding:0;height:1123px;overflow:hidden}
+.rel.pdfmode.sheet.cover .rp-cover{margin:0;height:1123px;min-height:0;padding:72px 66px 60px 84px;border-radius:0}
+.rel.pdfmode.sheet.cover .rp-cover::before{width:22px}
+.rel.pdfmode .rp-cv-mid{margin-top:120px}
+.rel.pdfmode .rp-h{margin-top:0}
+.rel.pdfmode .pbreak+.rp-h{margin-top:0}
+.rel.pdfmode .scroll{overflow:visible;border:0}
+.rel.pdfmode th,.rel.pdfmode td{white-space:normal;padding:7px 8px;font-size:12px}
+.pfoot{position:absolute;left:58px;right:58px;bottom:30px;display:flex;justify-content:space-between;font:11px var(--sans);color:#8a8f97;border-top:1px solid #e3e5e8;padding-top:10px}
+.pfoot b{color:#16181c}
+.rel.pdfmode .rp-base{margin-top:16px}.rel.pdfmode .rp-sig{margin-top:28px}.rel.pdfmode .rp-op{padding:14px 16px}.rel.pdfmode .rp-op p{font-size:12.5px;line-height:1.5}
+.rel.pdfmode tbody tr:nth-child(even) td{background:#fafbfc}.rel.pdfmode tbody tr td{background:#fff}.rel.pdfmode tbody tr:nth-child(even) td{background:#fafbfc}.rel.pdfmode tr.win td{background:#fcebeb!important}
+.rel.pdfmode *{letter-spacing:0!important;font-feature-settings:normal!important;font-variant-numeric:normal!important}
 @media (max-width:560px){.brandbar .ref{display:none}.stepper{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.stepper .sl{display:none}.stepper .sp{padding:8px;gap:6px;flex-direction:column;align-items:flex-start}.stepper .sp b{font-size:12px}.hl{padding:22px 20px 22px 28px}.titlebar .wrap{padding-top:22px;padding-bottom:18px}.card{padding:18px}}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2532,14 +2550,68 @@ function credCliRel(r){
   for(const x of Y.ativ){const rv=sum(x.m);simples+=pcDas*(rv/tot)*x.pctB2B;reg+=rv*(1-x.pctExp)*(1-x.red)*cbsEfetiva(cb,N.P)*x.pctB2B}
   return (simples||reg)?{simples,reg}:null;
 }
+/* ---------- PDF direto (sem caixa de impressão) ---------- */
+const H2P='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+function loadH2P(){return new Promise((ok,err)=>{if(window.html2pdf)return ok();const s=document.createElement('script');s.src=H2P;s.onload=ok;s.onerror=()=>err(new Error('não foi possível carregar o gerador de PDF; verifique a internet'));document.head.appendChild(s)})}
+async function gerarPDF(btn){
+  const txt=btn?btn.textContent:'';if(btn){btn.disabled=true;btn.textContent='Gerando PDF…'}
+  let stage=null;
+  try{
+    await loadH2P();try{await document.fonts.ready}catch(e){}
+    const PW=794,PH=1123;
+    stage=document.createElement('div');stage.className='pdfstage';document.body.appendChild(stage);
+    const src=document.createElement('div');src.className='rel pdfmode';src.innerHTML=montarRelatorio();stage.appendChild(src);
+    const sheets=[];let cur=null;
+    const novo=cls=>{cur=document.createElement('div');cur.className='rel pdfmode sheet '+(cls||'');stage.appendChild(cur);sheets.push(cur);return cur};
+    const titulo=el=>el&&(el.classList.contains('rp-h')||/^H[234]$/.test(el.tagName));
+    for(const b of [...src.children]){
+      if(b.tagName==='STYLE')continue;
+      if(b.classList.contains('rp-cover')){novo('cover').appendChild(b);cur=null;continue}
+      if(b.classList.contains('pbreak')){cur=null;continue}
+      if(!cur)novo();
+      cur.appendChild(b);
+      if(cur.scrollHeight>PH&&cur.children.length>1){
+        const mover=[b];const prev=b.previousElementSibling;if(prev&&titulo(prev)&&cur.children.length>2)mover.unshift(prev);
+        const n=novo();mover.forEach(x=>n.appendChild(x));
+      }
+    }
+    src.remove();
+    /* html2canvas não aplica filter: gera a logo branca da capa em imagem */
+    for(const im of stage.querySelectorAll('.rp-cover .wm')){try{await new Promise(r=>{if(im.complete)r();else im.onload=r});const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;const g=c.getContext('2d');g.drawImage(im,0,0);const d=g.getImageData(0,0,c.width,c.height);for(let k=0;k<d.data.length;k+=4){d.data[k]=255-d.data[k];d.data[k+1]=255-d.data[k+1];d.data[k+2]=255-d.data[k+2]}g.putImageData(d,0,0);im.src=c.toDataURL('image/png');im.style.filter='none';await new Promise(r=>{if(im.complete)r();else im.onload=r})}catch(e){}}
+    const tot=sheets.length;
+    sheets.forEach((sh,i)=>{if(!sh.classList.contains('cover')){const f=document.createElement('div');f.className='pfoot';f.innerHTML=`<span>Exato Soluções Contábeis · Planejamento tributário 2026–2027</span><b>${i+1} / ${tot}</b>`;sh.appendChild(f)}});
+    const pdf=await html2pdf().set({margin:0,jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:true}}).from('<div style="height:1px"></div>').toPdf().get('pdf');
+    for(let i=0;i<sheets.length;i++){
+      if(btn)btn.textContent=`Gerando PDF… ${i+1}/${tot}`;
+      const cv=await html2pdf().set({margin:0,html2canvas:{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:PW,width:PW,x:0,scrollX:0,scrollY:0},jsPDF:{unit:'px',format:[PW,PH],hotfixes:['px_scaling']}}).from(sheets[i]).toCanvas().get('canvas');
+      const pxPage=Math.round(cv.width*297/210);
+      for(let y=0,k=0;y<cv.height-4;y+=pxPage,k++){
+        const part=document.createElement('canvas');part.width=cv.width;part.height=Math.min(pxPage,cv.height-y);
+        const g=part.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,part.width,part.height);g.drawImage(cv,0,y,cv.width,part.height,0,0,cv.width,part.height);
+        if(i>0||k>0)pdf.addPage('a4','portrait');
+        pdf.addImage(part.toDataURL('image/jpeg',.86),'JPEG',0,0,210,210*part.height/part.width,undefined,'FAST');
+      }
+    }
+    const pg=ui.docs&&ui.docs.pg,nome=(pg&&pg.nome?pg.nome:'empresa').replace(/[\\/:*?"<>|]+/g,' ').trim().slice(0,80);
+    pdf.save(`Planejamento tributário - ${nome}.pdf`);
+  }catch(e){
+    console.warn(e);
+    if(confirm('O PDF direto não pôde ser gerado ('+(e&&e.message?e.message:'erro')+'). Abrir a impressão do navegador para salvar em PDF?'))window.print();
+  }finally{
+    if(stage)stage.remove();
+    if(btn){btn.disabled=false;btn.textContent=txt}
+  }
+}
+
 function renderRel(){
   const o=$('#p-rel'); if(!o)return;
   const emb=window.self!==window.top;
   let h=`<div class="card rel">${montarRelatorio()}</div>`;
-  h=`<div class="no-print row" style="justify-content:space-between;margin-bottom:14px"><div><h2 style="margin:0">Relatório analítico</h2><p class="small" style="margin:4px 0 0">Versão para o cliente: a resposta, o que fazer, a comparação e os pontos de atenção. Marque o anexo técnico para incluir os cálculos detalhados.</p></div>${emb?'<p class="small" style="max-width:34ch">Para gerar o PDF, abra o planejador pelo link público (esta visualização não permite imprimir).</p>':'<div class="row"><label class="relopt"><input type="checkbox" id="relAnexo" '+(ui.relAnexo?'checked':'')+'> Incluir anexo técnico (para o contador)</label><button class="btn ghost" id="relBaixar" type="button">Baixar em HTML</button><button class="btn" id="relImprimir" type="button">Baixar em PDF</button></div>'}</div>`+h;
+  h=`<div class="no-print row" style="justify-content:space-between;margin-bottom:14px"><div><h2 style="margin:0">Relatório analítico</h2><p class="small" style="margin:4px 0 0">Versão para o cliente: a resposta, o que fazer, a comparação e os pontos de atenção. Marque o anexo técnico para incluir os cálculos detalhados.</p></div>${emb?'<p class="small" style="max-width:34ch">Para gerar o PDF, abra o planejador pelo link público (esta visualização não permite imprimir).</p>':'<div class="row"><label class="relopt"><input type="checkbox" id="relAnexo" '+(ui.relAnexo?'checked':'')+'> Incluir anexo técnico (para o contador)</label><button class="btn ghost" id="relPrint" type="button">Imprimir</button><button class="btn" id="relImprimir" type="button">Baixar PDF</button></div>'}</div>`+h;
   o.innerHTML=h;
   const b=$('#relBaixar'); if(b)b.onclick=()=>{const doc='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relatório analítico</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap"><style>'+document.querySelector('style').textContent+'</style></head><body><div class="wrap gut" style="padding-top:24px"><div class="card rel">'+montarRelatorio()+'</div></div></body></html>';const u=URL.createObjectURL(new Blob([doc],{type:'text/html'}));const a=document.createElement('a');a.href=u;a.download='relatorio-analitico.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)};
-  const p=$('#relImprimir'); if(p)p.onclick=()=>{window.print()};
+  const p=$('#relImprimir'); if(p)p.onclick=()=>gerarPDF(p);
+  const pr=$('#relPrint'); if(pr)pr.onclick=()=>window.print();
   const ax=$('#relAnexo'); if(ax)ax.onchange=()=>{ui.relAnexo=ax.checked;renderRel()};
 }
 
@@ -2562,7 +2634,7 @@ function restaurarDocs(sn){
   ui.slotSaved=sn.counts||null;
   if(typeof ttdAuto==='function'&&S&&S.ttd)ttdAuto();
 }
-const VERSAO_PROG='2026-10-30.24';
+const VERSAO_PROG='2026-10-30.25';
 function completarS(s){
   s.example=!!s.example;
   /* rev 4 (30/10/2026): ICMS/ISS fora da base da CBS (LC 214, art. 12, §2º, V); LC 224 e redução do art. 347 ligadas */

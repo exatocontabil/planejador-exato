@@ -2046,7 +2046,7 @@ function xmlRender(){
   const av=[...fora];
   if(ign.nfseIlegivel)av.push(`${ign.nfseIlegivel} NFS-e em layout que não consegui ler foram ignoradas. Envie um exemplo do município para eu incluir o formato.`);
   if(Y.icmsVal===0&&Y.eligBase>0)av.push(Y.ufEmit==='SC'||Y.estIntraBase<=0.5?'As notas de saída não destacam ICMS, o que é normal para empresa do Simples. Estimei a alíquota efetiva pelas alíquotas interestaduais (4%, 7% e 12%, conforme destino e origem do produto) e 17% nas vendas dentro de SC. Confirme por produto.':'As notas de saída não destacam ICMS e há vendas dentro do estado de origem: informe a alíquota interna à mão.');
-  if(nm<12)av.push(`Os documentos cobrem ${nm} de 12 meses de ${st.ano}. <label style="display:inline;color:inherit;font-weight:700"><input id="xmlAnual" type="checkbox" ${st.anual?'checked':''}> Projetar o ano pela média dos meses lidos</label> (hipótese: multiplica por ${nm>0?(12/nm).toFixed(2).replace('.',','):'—'}).`);
+  if(nm<12)av.push(`Os documentos cobrem ${nm} de 12 meses de ${st.ano}. ${pgState&&!pgState.erro?'A receita anual e a RBT12 vêm do extrato do PGDAS-D; as notas definem a composição (atividades, ICMS, ST, compras e créditos), ajustada à receita anual.':'Sem o extrato do PGDAS-D, os meses que faltam são projetados pela média dos últimos meses lidos. Anexe o extrato para usar a receita declarada e a RBT12 real.'}`);
   av.push('Valores estimados a partir de CFOP, CST e layouts de NFS-e e CT-e: confira por amostragem. A base de CBS/IBS usa o valor do documento e ainda precisa ser conferida com a LC 214.');
   if(Y.ecom&&Y.ecom.base>0&&!(S.ttd&&S.ttd.possui==='sim'&&S.ttd.itens.some(i=>i.cod==='478')))av.push(`Encontramos ${brl(Y.ecom.base)} em vendas pela internet ou telemarketing a consumidor final não contribuinte de outro estado (${pc(Y.eligBase>0?Y.ecom.base/Y.eligBase:0,1)} da receita de mercadorias). Se a empresa estiver, ou puder estar, no regime normal, elas podem ser elegíveis ao TTD 478. <button class="btn ghost sm" id="ttdSug" type="button">Considerar o TTD 478 no cálculo</button>`);
   h+=av.map(a=>`<div class="banner warn" style="margin-top:12px">${a}</div>`).join('')+`</div>`;
@@ -2065,43 +2065,50 @@ function aplicarTudo(){
   let Y=null,nm=0;
   if(st&&st.slots){st.docs=SLOTS.flatMap(s=>st.slots[s.id].docs);if(st.docs.length&&cn.length>=8){const {por}=agregarXml({...st,cnpj:cn});Y=por[st.ano]||null;nm=Y?Y.meses.size:0}}
   if(!r&&!Y)return;
-  const N=vazio();
-  if(r){
-    const cons=consolidarPGDAS(r),ch=m=>String(m).padStart(2,'0');
-    const m25=[...Array(12)].map((_,i)=>r.meses['2025-'+ch(i+1)]),completo=m25.every(v=>v!==undefined);
-    N.histRec=completo?r2(sum(m25)):r.rbt12;
-    N.histRecMensal=completo?m25.map(v=>v.toFixed(2).replace('.',',')).join('; '):'';
-    N.histFolha=r.folha.length?r2(sum(r.folha.map(f=>f.v))):0;
-    for(const a of [2026,2027])N.anos[a].ativ=cons.map(c=>({nome:TIPOS[c.tipo].rot,tipo:c.tipo,anual:r2(r.rbt12*c.share),mensal:'',aliqICMS:0,aliqISS:0,pctST:r2(c.pctST),pctMono:r2(c.pctMono),pctExp:r2(c.pctExp),pctB2B:0,red:0}));
-  }
-  if(Y){
-    const f=(st.anual&&nm<12&&nm>0)?12/nm:1;
-    const intra=Y.ufEmit==='SC'?0.17:null,estOk=Y.icmsVal===0&&Y.eligBase>0&&(Y.estIntraBase<=0.5||intra!=null);
-    const aliqEstVal=estOk?(Y.estInter+Y.estIntraBase*(intra||0))/Y.eligBase*100:0;
-    const rec=sum(Object.values(Y.rec)),dev=sum(Object.values(Y.devol)),aliq=Y.eligBase>0?(Y.icmsVal>0?Y.icmsVal/Y.eligBase*100:aliqEstVal):0,aliqIss=Y.baseIssPrest>0?Y.issPrest/Y.baseIssPrest*100:0;
-    const tipos=Object.entries(Y.recTipo).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
-    if(tipos.length){
-      const ativ=tipos.map(([t,v],i)=>{const liq=Math.max(0,v-(i===0?dev:0)),tp=t==='servico'?'serv_fr':t;
-        return {nome:TIPOS[tp].rot,tipo:tp,anual:r2(liq*f),mensal:'',aliqICMS:t==='servico'?0:r2(aliq),aliqEst:t!=='servico'&&Y.icmsVal===0&&aliq>0,aliqISS:t==='servico'?r2(aliqIss):0,
-          pctST:r2(rec?Y.st/rec*100:0),pctMono:r2(rec?Y.mono/rec*100:0),pctExp:r2(rec?Y.exp/rec*100:0),pctB2B:0,red:0}});
-      for(const a of [2026,2027])N.anos[a].ativ=JSON.parse(JSON.stringify(ativ));
-    }
+  const N=vazio(),ch=m=>String(m).padStart(2,'0'),fmtM=a=>a.map(v=>(Math.round(v*100)/100).toFixed(2).replace('.',',')).join('; ');
+  /* Receita mês a mês: o PGDAS manda na escala (RBT12 e receitas mensais declaradas); as notas dão a composição.
+     Meses sem informação são projetados pela média dos meses conhecidos mais recentes. */
+  const serie=(mapa,ano,fb)=>{const k=[...Array(12)].map((_,i)=>mapa[ano+'-'+ch(i+1)]),kn=k.map((v,i)=>[v,i]).filter(([v])=>v!==undefined);
+    const ult=kn.slice(-3).map(([v])=>v),med=ult.length?sum(ult)/ult.length:fb;return {v:k.map(v=>v===undefined?med:v),conh:kn.length}};
+  let M26=null,H25=null,origem='';
+  if(r){const mp=r.meses,fb=r.rbt12/12;H25=serie(mp,2025,fb);const h=H25.v;M26=serie(mp,2026,sum(h.slice(-3))/3);origem=`PGDAS-D (PA ${ch(r.pa.mes)}/${r.pa.ano}): ${M26.conh} mês(es) de 2026 declarados${M26.conh<12?', os demais projetados pela média dos últimos meses':''}`}
+  else if(Y){const mp={};for(const [m,v] of Object.entries(Y.rec))mp[st.ano+'-'+m]=v-(Y.devol[m]||0);
+    if(st.ano==='2026'){M26=serie(mp,2026,0);origem=`notas de ${st.ano}: ${nm} mês(es) lidos${nm<12?', os demais projetados pela média dos últimos meses':''}`}
+    else if(st.ano==='2025'){H25=serie(mp,2025,0);M26={v:H25.v.slice(),conh:0};origem=`notas de 2025 (${nm} mês(es)); 2026 projetado igual a 2025`}
+    else{const md=sum(Object.values(mp))/Math.max(1,nm);M26={v:Array(12).fill(md),conh:0};origem=`notas de ${st.ano}: média mensal de ${nm} mês(es) projetada para 2026`}}
+  if(!H25&&M26)H25={v:M26.v.slice(),conh:0};
+  N.histRec=r2(sum(H25.v));N.histRecMensal=fmtM(H25.v);
+  if(r)N.histFolha=r.folha.length?r2(sum(r.folha.map(f=>f.v))):0;
+  const tot26=sum(M26.v);
+  /* composição por atividade */
+  let comp=[];
+  if(Y&&sum(Object.values(Y.recTipo))>0){
+    const rec=sum(Object.values(Y.rec)),dev=sum(Object.values(Y.devol)),intra=Y.ufEmit==='SC'?0.17:null,estOk=Y.icmsVal===0&&Y.eligBase>0&&(Y.estIntraBase<=0.5||intra!=null);
+    const aliqEstVal=estOk?(Y.estInter+Y.estIntraBase*(intra||0))/Y.eligBase*100:0,aliq=Y.eligBase>0?(Y.icmsVal>0?Y.icmsVal/Y.eligBase*100:aliqEstVal):0,aliqIss=Y.baseIssPrest>0?Y.issPrest/Y.baseIssPrest*100:0;
+    const tipos=Object.entries(Y.recTipo).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]),liqs=tipos.map(([t,v],i)=>Math.max(0,v-(i===0?dev:0))),tl=sum(liqs)||1;
+    const cons=r?consolidarPGDAS(r):[];
+    comp=tipos.map(([t,v],i)=>{const tp=t==='servico'?'serv_fr':t,pg=cons.find(c=>c.tipo===tp);
+      return {tipo:tp,share:liqs[i]/tl,aliqICMS:t==='servico'?0:r2(aliq),aliqEst:t!=='servico'&&Y.icmsVal===0&&aliq>0,aliqISS:t==='servico'?r2(aliqIss):0,
+        pctST:r2(pg?pg.pctST:(rec?Y.st/rec*100:0)),pctMono:r2(pg?pg.pctMono:(rec?Y.mono/rec*100:0)),pctExp:r2(pg?pg.pctExp:(rec?Y.exp/rec*100:0))}});
+    /* compras, créditos e despesas na mesma escala da receita anual */
+    const k=(rec-dev)>0?tot26/(rec-dev):1;
     for(const a of [2026,2027]){const y=N.anos[a];
-      y.compras=r2(Y.comprasTot*f);
-      y.icmsCred=r2((Y.icmsCred+Y.freteIcms)*f);
-      y.baseCredPC=r2((Y.baseCredPC+Y.servTom+Y.frete-Y.freteIcms)*f);
-      y.baseCredCBS=r2((Y.baseCredCBS+Y.servTom-Y.servTomSimples+Y.frete-Y.freteSimples)*f);
-      y.despesas=r2((Y.uso+Y.servTom+Y.frete)*f);
-    }
-    if(!r&&st.ano==='2025'&&nm===12){N.histRec=r2(rec-dev);N.histRecMensal=[...Array(12)].map((_,i)=>{const m=String(i+1).padStart(2,'0');return ((Y.rec[m]||0)-(Y.devol[m]||0)).toFixed(2).replace('.',',')}).join('; ')}
-  }
+      y.compras=r2(Y.comprasTot*k);y.icmsCred=r2((Y.icmsCred+Y.freteIcms)*k);
+      y.baseCredPC=r2((Y.baseCredPC+Y.servTom+Y.frete-Y.freteIcms)*k);
+      y.baseCredCBS=r2((Y.baseCredCBS+Y.servTom-Y.servTomSimples+Y.frete-Y.freteSimples)*k);
+      y.despesas=r2((Y.uso+Y.servTom+Y.frete)*k);}
+    if(Math.abs(k-1)>.01)origem+=`; compras e créditos das notas ajustados à receita anual (fator ${k.toFixed(2).replace('.',',')})`;
+  }else if(r){comp=consolidarPGDAS(r).map(c=>({tipo:c.tipo,share:c.share,aliqICMS:0,aliqISS:0,pctST:r2(c.pctST),pctMono:r2(c.pctMono),pctExp:r2(c.pctExp)}))}
+  if(comp.length)for(const a of [2026,2027])N.anos[a].ativ=comp.map(c=>{const m=M26.v.map(v=>v*c.share);
+    return {nome:TIPOS[c.tipo].rot,tipo:c.tipo,anual:r2(sum(m)),mensal:fmtM(m),aliqICMS:c.aliqICMS,aliqEst:!!c.aliqEst,aliqISS:c.aliqISS,pctST:c.pctST,pctMono:c.pctMono,pctExp:c.pctExp,pctB2B:0,red:0}});
+  N.origemReceita=origem;
   S=N; ttdAuto();
   ui.msg='Documentos aplicados. O aviso amarelo em “Dados da empresa” lista só o que ainda falta e se aplica às suas atividades.';
   renderDados(); calcular(); setTab('rel'); window.scrollTo(0,0);
 }
 function ligaDocs(){
   const f=$('#pgFile'); if(!f)return;
-  const novoXml=()=>({slots:Object.fromEntries(SLOTS.map(s=>[s.id,{docs:[]}])),cancel:new Set(),ign:{invalidos:0,nfse:0,nfseIlegivel:0,outros:0,eventos:0,naoXml:0},cnpj:'',ano:null,anual:false,docs:[]});
+  const novoXml=()=>({slots:Object.fromEntries(SLOTS.map(s=>[s.id,{docs:[]}])),cancel:new Set(),ign:{invalidos:0,nfse:0,nfseIlegivel:0,outros:0,eventos:0,naoXml:0},cnpj:'',ano:null,anual:true,docs:[]});
   const procPg=txt=>{pgState=lerPGDAS(txt);ui.pgMeses=pgState&&!pgState.erro?pgState.meses:null;ui.docs=ui.docs||{};ui.docs.pg=pgState&&!pgState.erro?pgState:null;refreshImport()};
   const ingestPg=async file=>{
     if(!file)return; const o=$('#pgOut'); if(o)o.innerHTML='<p class="small">Lendo o arquivo…</p>';
@@ -2375,7 +2382,7 @@ function restaurarDocs(sn){
   ui.slotSaved=sn.counts||null;
   if(typeof ttdAuto==='function'&&S&&S.ttd)ttdAuto();
 }
-const VERSAO_PROG='2026-10-30.19';
+const VERSAO_PROG='2026-10-30.20';
 function completarS(s){
   s.example=!!s.example;
   /* rev 4 (30/10/2026): ICMS/ISS fora da base da CBS (LC 214, art. 12, §2º, V); LC 224 e redução do art. 347 ligadas */
@@ -2615,7 +2622,7 @@ function fld(path,label,val,type,extra){
 }
 function renderDados(){
   const frAny=[2026,2027].some(a=>S.anos[a].ativ.some(x=>x.tipo==='serv_fr')),fdAll=faltasDados(norm(S));
-  let h=`<h2>Dados da empresa</h2><p class="sub">Informe valores anuais em reais; percentuais em pontos (18 = 18%). Quando houver sazonalidade, cole 12 valores mensais no campo opcional da atividade. Nada é preenchido por suposição: o que ficar em branco vale zero e gera alerta.</p>`;
+  let h=`<h2>Dados da empresa</h2>`+(S.origemReceita?`<div class="banner ok"><b>Origem da receita:</b> ${esc(S.origemReceita)}.</div>`:'')+`<p class="sub">Informe valores anuais em reais; percentuais em pontos (18 = 18%). Quando houver sazonalidade, cole 12 valores mensais no campo opcional da atividade. Nada é preenchido por suposição: o que ficar em branco vale zero e gera alerta.</p>`;
   {const fd=faltasDados(norm(S));const todos=[...fd.crit,...fd.f];if(todos.length&&!S.example)h+=`<div class="banner warn"><strong>Falta informar (só o que se aplica às suas atividades):</strong><ul class="tight" style="margin-top:8px">${todos.map(t=>'<li>'+esc(t)+'</li>').join('')}</ul></div>`}
   h+=cardTtd();
   h+=cardImport();

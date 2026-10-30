@@ -824,6 +824,9 @@ function icmsAuto(){
     return;
   }
   const it=((S.ttd&&S.ttd.possui==='sim'&&S.ttd.itens)||[]).find(i=>i.autoKind==='ecom'&&i.modo!=='manual'&&i.todasCF!==false);
+  const au=it&&it.auto&&!it.auto.stale&&it.auto.todasCF&&it.auto.eligBase>0?it.auto:null;
+  if(au){const c=au.cl||{},est=Math.round(((+c[4]||0)*4+(+c[7]||0)*7+(+c[12]||0)*12+Math.max(0,au.eligBase-au.base)*17)/au.eligBase*100)/100;
+    for(const y of [2026,2027])S.anos[y].ativ.forEach(x=>{if(TIPOS[x.tipo].merc&&(!(+x.aliqICMS>0)||x.aliqEst)){x.aliqICMS=est;x.aliqEst=true}});return}
   if(it){const g=(v,d)=>(v===''||v==null)?d:Math.max(0,+v||0),a12=g(it.pm12,60),a7=g(it.pm7,40),a4=g(it.pm4,0),tt=a12+a7+a4,pj=Math.min(1,Math.max(0,((it.pctProj===''||it.pctProj==null)?90:+it.pctProj)/100)),ai0=tt>0?(a12*12+a7*7+a4*4)/tt:7,a=Math.round((pj*ai0+(1-pj)*17)*100)/100;for(const y of [2026,2027])S.anos[y].ativ.forEach(x=>{if(TIPOS[x.tipo].merc&&(!(+x.aliqICMS>0)||x.aliqEst)){x.aliqICMS=a;x.aliqEst=true}})}
 }
 function calcular(){
@@ -1970,7 +1973,7 @@ function restaurarDocs(sn){
   ui.slotSaved=sn.counts||null;
   if(typeof ttdAuto==='function'&&S&&S.ttd)ttdAuto();
 }
-const VERSAO_PROG='2026-10-30.13';
+const VERSAO_PROG='2026-10-30.14';
 function completarS(s){
   s.example=!!s.example;
   const base=exemplo();

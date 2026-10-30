@@ -1115,6 +1115,7 @@ function icmsAuto(){
 }
 function calcular(){
   icmsAuto();
+  try{if(escalaPeloPGDAS()&&typeof renderDados==='function'&&ui.tab==='dados')renderDados()}catch(e){console.warn(e)}
   N=norm(S); R=avaliar(N);
   try{localStorage.setItem('planej_v1',JSON.stringify(S))}catch(e){}
   $('#exBanner').hidden=!S.example;
@@ -2059,6 +2060,25 @@ function wireXml(){
   const au=$('#xmlAnual'); if(au)au.onchange=()=>{st.anual=au.checked;xmlRender()};
   const sg=$('#ttdSug'); if(sg)sg.onclick=()=>{S.ttd=S.ttd||{possui:'',itens:[],exclLucro:false};lerCard('#ttdCard');S.ttd.possui='sim';if(!S.ttd.itens.some(i=>i.cod==='478'))S.ttd.itens.push(ttdPreset('478'));ttdAuto();refreshTtd();xmlRender()};
 }
+/* Receita mês a mês de um ano a partir de um mapa 'AAAA-MM' → valor; meses sem dado = média dos últimos 3 conhecidos */
+function serieMeses(mapa,ano,fb){const ch=m=>String(m).padStart(2,'0'),k=[...Array(12)].map((_,i)=>mapa[ano+'-'+ch(i+1)]),kn=k.filter(v=>v!==undefined);
+  const ult=kn.slice(-3),med=ult.length?sum(ult)/ult.length:fb;return {v:k.map(v=>v===undefined?med:v),conh:kn.length}}
+/* Planejamentos salvos antes da versão .20 podiam ter a receita de poucos meses de notas tratada como receita anual.
+   Se há extrato do PGDAS e a receita anual destoa da RBT12, refaz a escala mês a mês pelo extrato (mantendo a composição). */
+function escalaPeloPGDAS(){
+  const r=pgState&&!pgState.erro?pgState:null; if(!r||!S||S.example||!(r.rbt12>0))return false;
+  const tot=a=>sum(S.anos[a].ativ.map(x=>sum(meses12(x.mensal,+x.anual||0))));
+  const t26=tot(2026); if(t26>=.6*r.rbt12&&t26<=1.67*r.rbt12)return false;
+  const fmtM=a=>a.map(v=>(Math.round(v*100)/100).toFixed(2).replace('.',',')).join('; '),r2=v=>Math.round(v*100)/100;
+  const H=serieMeses(r.meses,2025,r.rbt12/12),M=serieMeses(r.meses,2026,sum(H.v.slice(-3))/3),nv=sum(M.v);
+  for(const a of [2026,2027]){const y=S.anos[a],ta=tot(a),k=ta>0?nv/ta:1;
+    const sh=y.ativ.map(x=>{const t=sum(meses12(x.mensal,+x.anual||0));return ta>0?t/ta:1/y.ativ.length});
+    y.ativ.forEach((x,i)=>{const m=M.v.map(v=>v*sh[i]);x.mensal=fmtM(m);x.anual=r2(sum(m))});
+    for(const f of ['compras','icmsCred','baseCredPC','baseCredCBS','despesas','ipi'])y[f]=r2((+y[f]||0)*k)}
+  S.histRec=r2(sum(H.v));S.histRecMensal=fmtM(H.v);
+  S.origemReceita=`PGDAS-D (PA ${String(r.pa.mes).padStart(2,'0')}/${r.pa.ano}): ${M.conh} mês(es) de 2026 declarados${M.conh<12?', os demais projetados pela média dos últimos meses':''}. Corrigido automaticamente: a receita anual estava em ${brl(t26)}, muito abaixo da RBT12 de ${brl(r.rbt12)}`;
+  return true;
+}
 function aplicarTudo(){
   const r=pgState&&!pgState.erro?pgState:null,st=xmlState,r2=v=>Math.round(v*100)/100;
   const cn=st?dig(st.cnpj):'';
@@ -2068,8 +2088,7 @@ function aplicarTudo(){
   const N=vazio(),ch=m=>String(m).padStart(2,'0'),fmtM=a=>a.map(v=>(Math.round(v*100)/100).toFixed(2).replace('.',',')).join('; ');
   /* Receita mês a mês: o PGDAS manda na escala (RBT12 e receitas mensais declaradas); as notas dão a composição.
      Meses sem informação são projetados pela média dos meses conhecidos mais recentes. */
-  const serie=(mapa,ano,fb)=>{const k=[...Array(12)].map((_,i)=>mapa[ano+'-'+ch(i+1)]),kn=k.map((v,i)=>[v,i]).filter(([v])=>v!==undefined);
-    const ult=kn.slice(-3).map(([v])=>v),med=ult.length?sum(ult)/ult.length:fb;return {v:k.map(v=>v===undefined?med:v),conh:kn.length}};
+  const serie=serieMeses;
   let M26=null,H25=null,origem='';
   if(r){const mp=r.meses,fb=r.rbt12/12;H25=serie(mp,2025,fb);const h=H25.v;M26=serie(mp,2026,sum(h.slice(-3))/3);origem=`PGDAS-D (PA ${ch(r.pa.mes)}/${r.pa.ano}): ${M26.conh} mês(es) de 2026 declarados${M26.conh<12?', os demais projetados pela média dos últimos meses':''}`}
   else if(Y){const mp={};for(const [m,v] of Object.entries(Y.rec))mp[st.ano+'-'+m]=v-(Y.devol[m]||0);
@@ -2382,7 +2401,7 @@ function restaurarDocs(sn){
   ui.slotSaved=sn.counts||null;
   if(typeof ttdAuto==='function'&&S&&S.ttd)ttdAuto();
 }
-const VERSAO_PROG='2026-10-30.20';
+const VERSAO_PROG='2026-10-30.21';
 function completarS(s){
   s.example=!!s.example;
   /* rev 4 (30/10/2026): ICMS/ISS fora da base da CBS (LC 214, art. 12, §2º, V); LC 224 e redução do art. 347 ligadas */

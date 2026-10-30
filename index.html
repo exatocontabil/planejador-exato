@@ -2184,6 +2184,7 @@ function faltasDados(NN){
     if(!Y.acess.simples&&!Y.acess.presumido&&!Y.acess.real)add('acess','Custo anual das obrigações acessórias de cada regime',false,a);
     if(Y.rat===0&&Y.sal>0)add('rat','RAT/FAP (sem ele os encargos do Presumido e do Real ficam subestimados)',false,a);
     if(!Y.compras)add('compras','Compras de mercadorias e insumos',false,a);
+    if(a===2026&&Y.ativ.some(x=>x.tipo==='industria')&&!Y.ipi)add('ipi','IPI líquido de 2026 no Presumido e no Real (indústria): sem ele esses regimes ficam sem o IPI, que no Simples vem dentro do DAS; em 2027 o IPI é zerado para a maioria dos produtos (EC 132/2023)',false,a);
   }
   const fa=s=>s.size===2?'2026 e 2027':[...s][0],f=[],crit=[];
   (NN.P.ttdPend||[]).forEach(p=>(p.crit?crit:f).push(p.t));
@@ -2401,7 +2402,7 @@ function restaurarDocs(sn){
   ui.slotSaved=sn.counts||null;
   if(typeof ttdAuto==='function'&&S&&S.ttd)ttdAuto();
 }
-const VERSAO_PROG='2026-10-30.21';
+const VERSAO_PROG='2026-10-30.22';
 function completarS(s){
   s.example=!!s.example;
   /* rev 4 (30/10/2026): ICMS/ISS fora da base da CBS (LC 214, art. 12, §2º, V); LC 224 e redução do art. 347 ligadas */

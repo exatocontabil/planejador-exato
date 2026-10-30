@@ -153,6 +153,17 @@ details.mini>div{padding:10px 0 0}
 .rel h3{font-size:14px;margin:18px 0 8px}
 .rel-logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
 .rel-logo .em{height:34px;width:auto}.rel-logo .wm{height:30px;width:auto;filter:var(--wm-filter)}
+.txl{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.tx{border-top:1px solid var(--line)}.txl>.tx:first-child{border-top:0}
+.tx>summary,.tx.tot{display:grid;grid-template-columns:minmax(120px,190px) 1fr auto;gap:14px;align-items:center;padding:13px 16px;cursor:pointer;list-style:none}
+.tx>summary::-webkit-details-marker{display:none}
+.tx>summary:hover{background:var(--bg)}
+.txl details.tx{border:0;border-top:1px solid var(--line);border-radius:0;margin:0;box-shadow:none;background:transparent;padding:0}.txl>.tx:first-child{border-top:0}
+.tx .tn{font-weight:600}.tx .tc{color:var(--muted);font-size:13.5px;line-height:1.45;font-weight:400}
+.tx .tv{text-align:right;font-weight:700;white-space:nowrap}.tx .tv small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.tx.tot{background:var(--bg);cursor:default;font-weight:700}
+.tx .txd{padding:4px 16px 16px}
+@media(max-width:640px){.tx>summary,.tx.tot{grid-template-columns:1fr auto}.tx .tc{grid-column:1/-1;order:3}}
 .parecer{border-radius:12px;padding:12px 14px;margin:12px 0;background:var(--bg);font-size:14px}
 .parecer.ok{background:var(--goodbg)}.parecer.atencao{background:var(--warnbg)}.parecer.risco{background:var(--badbg)}
 .meta td:first-child{width:34%;font-weight:600}.meta td:last-child{text-align:left}
@@ -843,6 +854,49 @@ function calcular(){
 function ranking(r){
   return ['simples','hibrido','presumido','real'].filter(k=>r[k]).map(k=>r[k]).sort((a,b)=>b.liq-a.liq);
 }
+
+/* Alavancas: o que precisaria mudar para o Presumido ou o Real valerem a pena */
+function alavancas(N,ano,cb){
+  const out=[],base=avaliarAno(N,ano,cb),rec=base.A.rec,rk=ranking(base),best=rk[0],Y=N.anos[ano];
+  const nm={presumido:'Lucro Presumido',real:'Lucro Real'};
+  const clone=()=>JSON.parse(JSON.stringify(N));
+  const comC=m=>{const C=clone(),y=C.anos[ano];for(const f of ['icmsCred','baseCredPC','baseCredCBS'])y[f]*=m;return avaliarAno(C,ano,cb)};
+  const ganha=(r,k)=>{const o=['simples','hibrido','presumido','real'].filter(n=>n!==k&&r[n]).map(n=>r[n].liq);return r[k].liq-Math.max(...o)};
+  const bis=(f,a,b)=>{for(let i=0;i<24;i++){const m=(a+b)/2;if(f(m))b=m;else a=m}return b};
+  const temCred=Y.icmsCred+Y.baseCredPC+Y.baseCredCBS>0,refB=Y.baseCredPC>0?Y.baseCredPC:Y.baseCredCBS;
+  const mMax=Y.compras>0&&refB>0?Math.max(1,Math.min(6,Y.compras/refB)):1;
+  ['presumido','real'].forEach(k=>{
+    const x=base[k];if(!x)return;
+    const alvo=rk.find(r=>r.nome!==k);
+    if(best.nome!==k&&temCred){
+      const gap=best.liq-x.liq;
+      if(mMax<=1.001)out.push({k:'atencao',t:`<b>${nm[k]}:</b> hoje fica ${brl(gap)} por ano atrás do ${REG[best.nome]}. Os créditos de entrada informados já cobrem praticamente todas as compras, então não há muito mais crédito a ganhar: a diferença vem de outros fatores (margem, folha, alíquotas).`});
+      else if(ganha(comC(mMax),k)<0)out.push({k:'atencao',t:`<b>${nm[k]}:</b> hoje fica ${brl(gap)} por ano atrás do ${REG[best.nome]}. Mesmo se todas as compras gerassem crédito, a diferença só cairia para ${brl(Math.max(0,best.liq-comC(mMax)[k].liq))}. Aumentar notas de compra, sozinho, não resolve: o que pesa é outro ponto (margem de lucro ou folha, veja abaixo).`});
+      else{const m=bis(m=>ganha(comC(m),k)>=0,1,mMax),r2=comC(m),ici=Y.icmsCred*m,sh0=Y.compras>0?Y.baseCredPC/Y.compras:0;
+        out.push({k:'atencao',t:`<b>${nm[k]}:</b> hoje fica ${brl(gap)} por ano atrás do ${REG[best.nome]}. Para empatar, o crédito de ICMS das compras precisa subir de ${brl(Y.icmsCred)} para cerca de ${brl(ici)} por ano (${m>=1.05?'+'+pc(m-1,0):'ajuste pequeno'})${sh0>0?`, o que equivale a passar de ${pc(sh0,0)} para ${pc(Math.min(1,sh0*m),0)} das compras com nota fiscal que gera crédito`:''}. Na prática: concentrar compras em fornecedores do Lucro Presumido ou Real que destacam ICMS na nota, exigir NF-e em toda compra e reduzir compras sem nota ou de fornecedores do Simples.`})}
+    }else if(best.nome===k&&temCred&&alvo){
+      const gap=x.liq-alvo.liq,f=m=>ganha(comC(m),k)>=0;
+      if(!f(0)){const m=bis(f,0,1);out.push({k:'ok',t:`<b>${nm[k]}</b> é o de maior resultado, com vantagem de ${brl(gap)} por ano sobre o ${REG[alvo.nome]}. Essa vantagem depende dos créditos de entrada: se eles caírem para cerca de ${brl(Y.icmsCred*m)} de ICMS (${pc(1-m,0)} a menos), a vantagem acaba. Manter as compras com nota fiscal e com destaque de ICMS protege a economia.`})}
+    }
+  });
+  const p=base.presumido,r=base.real;
+  if(p&&r){
+    const pes=pessoal(Y).pes,mg=d=>(rec-Y.compras-Y.despesas*d-pes)/rec,m0=mg(1);
+    const dif=d=>{const C=clone();C.anos[ano].despesas*=d;const q=avaliarAno(C,ano,cb);return q.real.liq-q.presumido.liq};
+    const d0=dif(1);let t=null;
+    for(let d=0;d<=8&&t===null;d+=.25){const a=dif(d),b=dif(d+.25);if((a>=0)!==(b>=0))t=bis(z=>(dif(z)>=0)===(b>=0),d,d+.25)}
+    if(t!==null&&Y.despesas>0){const mv=mg(t);
+      out.push({k:'atencao',t:`<b>Ponto de virada entre Presumido e Real:</b> hoje o ${d0>=0?'Lucro Real':'Lucro Presumido'} rende mais. Se a margem operacional (receita menos compras, despesas e folha) ${mv>m0?'subir':'cair'} de ${pc(m0,1)} para cerca de ${pc(mv,1)}, passa a valer mais o ${d0>=0?'Lucro Presumido':'Lucro Real'}. O Presumido tributa uma margem fixa (8% a 32% da receita) e o Real tributa o lucro de verdade, então o Real compensa quando o lucro é baixo e o Presumido quando é alto.`})
+    }else out.push({k:'atencao',t:`<b>Presumido x Real:</b> com a margem operacional atual de ${pc(m0,1)}, ${d0>=0?'o Real':'o Presumido'} leva vantagem e não encontramos um ponto de virada razoável ao variar as despesas.`});
+  }
+  if(base.presumido)out.push({k:'atencao',t:'<b>Como funciona o crédito em cada regime:</b> no Lucro Presumido o PIS e a COFINS são cumulativos e não geram crédito: comprar mais não os reduz; só o ICMS das compras (e o IPI) abate imposto. No Lucro Real, PIS e COFINS (até 2026) e a CBS (2027) geram crédito sobre compras e despesas, além do ICMS, e o IRPJ e a CSLL incidem sobre o lucro real. Por isso, mais notas de compra ajudam o Real mais do que o Presumido.'});
+  const tt=base.presumido&&base.presumido.ttd||base.real&&base.real.ttd;
+  if(tt&&tt.economia<0){const it=tt.itens[0];out.push({k:'risco',t:`<b>TTD ${tt.cods}:</b> hoje o benefício custa ${brl(-tt.economia)} a mais do que ajuda. Isso acontece porque o crédito presumido substitui o crédito efetivo das compras na parcela interestadual (estorno de ${brl(it.est)}) e ainda há fundos de ${brl(it.fundo)}. O TTD só compensa quando as compras com crédito forem relativamente pequenas ou a parcela interestadual a 12% for grande. Confira se a empresa deve mesmo aderir ou manter o crédito normal.`})}
+  const xm=ui.docs&&ui.docs.xml,Yx=xm&&xm.Y;
+  if(Yx&&Yx.fornSimples>0){const tot=Yx.comprasTot+Yx.fornSimples+(Yx.uso||0),sh=tot>0?Yx.fornSimples/tot:0;
+    if(sh>.05)out.push({k:'atencao',t:`<b>Fornecedores do Simples:</b> ${pc(sh,0)} das compras (${brl(Yx.fornSimples)}) vêm de fornecedores do Simples, que repassam pouco ou nenhum crédito. Trocar parte deles por fornecedores do regime normal aumenta o crédito de ICMS, e de CBS em 2027, e melhora o resultado do Presumido e do Real.`})}
+  return out;
+}
 function linhaTabela(rk,x,win){
   const imp=x.imp;
   return `<tr class="${win?'win':''}"><td>${REG[x.nome]}</td><td class="n">${brl(x.trib)}</td><td class="n">${brl(x.enc)}</td><td class="n">${brl(x.carga)}</td><td class="n">${pc(x.cargaPct)}</td><td class="n">${brl(x.acess)}</td><td class="n">${brl(x.liq)}</td><td class="n">${brl(x.irrfDiv)}</td><td class="n">${brl(x.liqPos)}</td></tr>`;
@@ -998,7 +1052,8 @@ function renderRes(){
   const porq=pq.length&&!crit.length?`<div class="card"><div class="cardh"><div><h3>Por que ${REG[w27.nome]}?</h3><p class="small">As diferenças que mais pesam, em 2027.</p></div><button class="btn ghost sm" id="irImp" type="button">Ver imposto por imposto</button></div><ul class="tight">${pq.map(t=>'<li>'+t+'</li>').join('')}</ul></div>`:'';
   const tpz=r27.presumido&&r27.presumido.ttd,trz=r27.real&&r27.real.ttd,tx=tpz||trz;
   const ttdB=tx?`<div class="banner" style="margin-bottom:16px"><b>TTD considerado: ${tx.cods}</b> (${tx.itens.map(i=>'TTD '+i.cod+': '+pc(i.pct,1)+' da receita de mercadorias').join('; ')}). Em 2027, o ICMS fica ${tpz?brl(tpz.economia)+' menor no Presumido':''}${tpz&&trz?' e ':''}${trz?brl(trz.economia)+' menor no Real':''} por ano. O benefício não vale no Simples, em que o ICMS vem dentro do DAS.</div>`:'';
-  h+=`${ttdB}<div class="dgrid">${comp}${faz}</div>${porq}`;
+  let alv='';try{const L=alavancas(N,2027,N.P.cbs.base);if(L.length&&!crit.length)alv=`<div class="card" style="margin-top:16px"><div class="cardh"><div><h3>O que faria o Presumido ou o Real valerem mais a pena</h3><p class="small">Alavancas em 2027, com os seus números.</p></div></div>${L.map(a=>parecer(a.k,a.t)).join('')}</div>`}catch(e){}
+  h+=`${ttdB}<div class="dgrid">${comp}${faz}</div>${porq}${alv}`;
   h+=`<h2 style="margin-top:34px">Análise detalhada</h2><p class="sub" style="margin-bottom:16px">Gráficos, limites do Simples, prazos e tabelas completas para quem quer conferir os números.</p>`;
   h+=`<div class="dgrid">`;
   h+=`<div class="card"><div class="cardh"><div><h3>Resultado líquido por regime</h3><p class="small">Receita menos custos, folha e tributos, antes do IRPF dos sócios.</p></div></div>${chartResultado()}</div>`;
@@ -1164,11 +1219,13 @@ function renderMemo(){
   let h=`<h2>Memória de cálculo</h2><p class="sub" style="margin-bottom:14px">O passo a passo de cada tributo com os seus números, para você refazer a conta. Escolha o ano e o regime.</p>`+bannerPend();
   h+=`<div class="row" style="margin-bottom:6px"><div class="seg" id="segMem">${[2026,2027].map(a=>`<button data-a="${a}" aria-pressed="${a===ano}">${a}</button>`).join('')}</div>${ano===2027?`<div class="seg" id="segMemCen">${cenKs.map(c=>`<button data-c="${c}" aria-pressed="${c===ui.cen}">CBS ${pc4(N.P.cbs[c])}</button>`).join('')}</div>`:''}<div class="seg" id="segMemReg">${ks.map(c=>`<button data-r="${c}" aria-pressed="${c===k}">${REGC[c]}</button>`).join('')}</div></div>`;
   h+=`<div class="kpis" style="margin:10px 0 16px">${kpi('Receita bruta',brl(rec),'Base de todos os cálculos')}${kpi('Tributos e encargos',brl(x.carga),pc(x.cargaPct,2)+' da receita')}${kpi('Sobra por ano',brl(x.liq),pc(x.liq/rec,1)+' da receita',x.liq<0?'bad':'good')}</div>`;
-  h+=`<div class="card"><div class="cardh"><div><h3>Para onde vai a receita</h3><p class="small">Como cada R$ 100 faturados se dividem em ${REG[k]}.</p></div></div>${fluxoReceita(x,Y)}</div>`;
-  h+=`<h3 style="margin-top:22px">Tributo por tributo</h3><div class="calc">${(x.linhas||[]).map(l=>cardCalc(l,rec)).join('')}</div>`;
-  const ex=extrasRegime(x,rec,ano); if(ex)h+=`<div class="card" style="margin-top:14px">${ex}</div>`;
+  const maior=(x.linhas||[]).filter(l=>!l.info&&l.v>0).sort((p,q)=>q.v-p.v).slice(0,3);
+  h+=`<div class="banner ${x.liq<0?"bad":"ok"}" style="margin:10px 0 16px"><b>Resumo:</b> em ${REG[k]} (${ano}), a empresa paga <b>${brl(x.carga)}</b> em tributos e encargos, o que é <b>${pc(x.cargaPct,2)}</b> da receita de ${brl(rec)}. Os que mais pesam: ${maior.map(l=>esc(l.t)+' ('+brl(l.v)+')').join(', ')}. Depois de pagar tudo, sobram <b>${brl(x.liq)}</b> por ano.</div>`;
+  h+=`<div class="card"><div class="cardh"><div><h3>Passo 1 · Para onde vai a receita</h3><p class="small">Como cada R$ 100 faturados se dividem em ${REG[k]}.</p></div></div>${fluxoReceita(x,Y)}</div>`;
+  h+=`<h3 style="margin-top:22px">Passo 2 · Os impostos, um por um</h3><p class="small" style="margin-bottom:8px">Cada linha mostra a conta com os seus números. Clique em “ver a conta” para o passo a passo e a base legal.</p><div class="txl">${(x.linhas||[]).filter(l=>!l.info).map(l=>`<details class="tx"><summary><span class="tn">${esc(l.t)}</span><span class="tc">${esc(l.calc)}</span><span class="tv">${brl(l.v)}<small>${rec?pc(l.v/rec,2)+' da receita':''}</small></span></summary><div class="txd">${cardCalc(l,rec)}</div></details>`).join('')}<div class="tx tot"><span class="tn">Total de tributos e encargos</span><span class="tc"></span><span class="tv">${brl(x.carga)}<small>${pc(x.cargaPct,2)} da receita</small></span></div></div>${(x.linhas||[]).filter(l=>l.info).map(l=>`<div class="banner ok" style="margin-top:10px"><b>${esc(l.t)}:</b> ${esc(l.calc)}. Resultado: <b>${brl(l.resV)}</b> por ano.</div>`).join('')}`;
+  const ex=extrasRegime(x,rec,ano); if(ex)h+=`<details class="card tbl" style="margin-top:14px"><summary><span><b>Detalhes do cálculo</b> <span class="small">· tabelas de apoio (TTD, enquadramento e outros)</span></span></summary><div style="padding:12px 14px">${ex}</div></details>`;
   if(k==='simples'||k==='hibrido')h+=`<details class="card tbl" style="margin-top:14px"><summary><span><b>DAS mês a mês</b> <span class="small">· alíquota efetiva e valor de cada competência</span></span></summary><div>${memoSimples(r,ano)}</div></details>`;
-  h+=`<h3 style="margin-top:22px">Do faturamento ao resultado</h3><div class="card"><table class="wf"><tbody>
+  h+=`<h3 style="margin-top:22px">Passo 3 · Do faturamento ao resultado</h3><div class="card"><table class="wf"><tbody>
     <tr><td>Receita bruta</td><td>${brl2(rec)}</td></tr>
     <tr><td>(−) Compras de mercadorias e insumos</td><td>${brl2(Y.compras)}</td></tr>
     <tr><td>(−) Despesas operacionais</td><td>${brl2(Y.despesas)}</td></tr>
@@ -1894,6 +1951,9 @@ function montarRelatorio(){
     est.map(([l,n])=>`<tr><td>${l} (CBS base)</td><td>${REG[n]}</td><td class="n">—</td></tr>`).join('')+`</tbody></table></div>`;
   const dif=rk27[1]?(w27.liq-rk27[1].liq)/r27.A.rec:0;
   h+=parecer(dif<.01?'atencao':'ok',`A diferença entre o primeiro e o segundo colocado em 2027 é de ${pc(dif)} da receita. ${dif<.01?'É uma diferença pequena: custos de transição, erros de estimativa ou mudanças de alíquota podem inverter a ordem.':'É uma diferença relevante, mas confirme as premissas antes de decidir.'}`);
+  /* alavancas */
+  {let L=[];try{L=alavancas(N,2027,N.P.cbs.base)}catch(e){}
+   if(L.length&&!crit.length){h+=sec('O que mudaria o resultado');h+=`<p class="small">Pontos que o cliente pode trabalhar para o Lucro Presumido ou o Lucro Real valerem mais a pena, calculados com os números desta empresa (2027, cenário base).</p>`+L.map(a=>parecer(a.k,a.t)).join('')}}
   /* demonstrativo */
   h+=sec('Demonstrativo dos tributos e alíquotas');
   h+=`<p class="small">Cada tributo, com a base, a alíquota e o cálculo, para mostrar por que a carga de cada regime é a que é.</p><h3>Quadro comparativo de 2026 (aferição)</h3>${matrizImpostos(r26)}<h3>Quadro comparativo de 2027 (CBS ${pc4(N.P.cbs.base)})</h3>${matrizImpostos(r27)}<h3>O que mais pesa em 2027</h3><ul class="tight">${explicaCarga(r27,2027).map(t=>'<li>'+t+'</li>').join('')}</ul>`;
@@ -1973,7 +2033,7 @@ function restaurarDocs(sn){
   ui.slotSaved=sn.counts||null;
   if(typeof ttdAuto==='function'&&S&&S.ttd)ttdAuto();
 }
-const VERSAO_PROG='2026-10-30.14';
+const VERSAO_PROG='2026-10-30.16';
 function completarS(s){
   s.example=!!s.example;
   const base=exemplo();

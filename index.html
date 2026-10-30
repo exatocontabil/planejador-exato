@@ -599,16 +599,10 @@ table.cv-t tr:first-child td:last-child{color:var(--accent);font-size:19px}
 .sig{border-top:1px solid var(--ink);margin-top:44px}
 @media screen and (max-width:760px){.card.rel{padding:26px 18px 26px 32px}.card.rel::before{left:16px}.cv-mid h1{font-size:32px}.cv-reg{font-size:28px}.intro{grid-template-columns:1fr}.cv{min-height:0}}
 @media print{
-  @page{size:A4;margin:20mm 16mm 20mm 22mm;
-    @top-left{content:"Planejamento tributário 2026–2027";font:9px 'IBM Plex Sans',Arial,sans-serif;color:#6b7078}
-    @top-right{font:9px 'IBM Plex Sans',Arial,sans-serif;color:#6b7078}
-    @bottom-left{content:"Exato Soluções Contábeis";font:600 9px 'IBM Plex Sans',Arial,sans-serif;color:#16181c}
-    @bottom-center{content:none}
-    @bottom-right{content:"Página " counter(page) " de " counter(pages);font:9px 'IBM Plex Sans',Arial,sans-serif;color:#6b7078}
-    @left-top{content:"";border-right:1.4pt solid #d10f14;margin-right:7mm}
-    @left-middle{content:"";border-right:1.4pt solid #d10f14;margin-right:7mm}
-    @left-bottom{content:"";border-right:1.4pt solid #d10f14;margin-right:7mm}}
-  @page :first{margin:16mm 16mm 16mm 22mm;@top-left{content:none}@top-right{content:none}@bottom-left{content:none}@bottom-right{content:none}}
+  @page{size:A4;margin:16mm 16mm 18mm 16mm;
+    @bottom-left{content:"Exato Soluções Contábeis  ·  Planejamento tributário 2026–2027";font:8.5px 'IBM Plex Sans',Arial,sans-serif;color:#8a8f97}
+    @bottom-right{content:counter(page) " / " counter(pages);font:600 8.5px 'IBM Plex Sans',Arial,sans-serif;color:#16181c}}
+  @page :first{margin:0;@bottom-left{content:none}@bottom-right{content:none}}
   :root:root{--tint:#f4f5f7;--line:#cfd3d9;--ink:#16181c;--muted:#4b5058}
   body{font-size:11px;line-height:1.5}
   .card.rel{padding:0 0 0 0;border:0}
@@ -695,6 +689,124 @@ table.cmpt td,table.cmpt th{font-size:14.5px;padding:12px 14px}
   .rel .bar{font-size:10.5pt}
   .rel .parecer{font-size:10pt}
   .rel .stk{font-size:10pt}
+}
+/* ===== Relatório moderno (rp-) ===== */
+.card.rel{padding:44px 52px;overflow:hidden}
+.card.rel::before{display:none}
+.rel{--rk:#0b0b0c;--rr:#d10f14;font-family:var(--sans)}
+.rp-cover{background:#0b0b0c;color:#fff;margin:-44px -52px 48px;padding:44px 52px;position:relative;overflow:hidden;min-height:620px;display:flex}
+.rp-cover::after{content:"";position:absolute;right:-46%;top:30%;width:82%;aspect-ratio:1;border-radius:50%;border:60px solid #d10f14}
+.rp-cover::before{content:"";position:absolute;left:0;top:0;bottom:0;width:10px;background:#d10f14}
+.rp-cv-in{position:relative;z-index:1;display:flex;flex-direction:column;gap:28px;width:100%}
+.rp-cv-top{display:flex;justify-content:space-between;align-items:center}
+.rp-logo{display:flex;align-items:center;gap:10px}.rp-logo .em{height:38px}.rp-logo .wm{height:32px;filter:invert(1)}
+.rp-cv-date{font:500 13px var(--sans);color:#a3a7ae}
+.rp-cv-mid{margin-top:40px}
+.rp-eyebrow{font:600 14px var(--sans);color:#ff5b55;margin:0 0 12px}
+.rp-cv-mid h1{font:700 46px/1.05 var(--sans);letter-spacing:-.03em;color:#fff;margin:0 0 12px;max-width:16ch}
+.rp-cv-meta{font:400 13px/1.6 var(--sans);color:#a3a7ae}
+.rp-cv-res{margin-top:auto;background:#fff;color:#0b0b0c;border-radius:14px;padding:22px 26px;max-width:560px}
+.rp-cv-q{font:600 13px var(--sans);color:#d10f14;margin:0}
+.rp-cv-reg{font:700 30px/1.15 var(--sans);letter-spacing:-.02em;margin:4px 0 14px}
+.rp-cv-kp{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;border-top:1px solid #e3e5e8;padding-top:14px}
+.rp-cv-kp span{display:block;font:500 11.5px var(--sans);color:#62666d}.rp-cv-kp b{font:700 17px var(--sans);letter-spacing:-.01em}
+.rp-cv-foot{display:flex;flex-direction:column;gap:2px;font:12px var(--sans);color:#a3a7ae}.rp-cv-foot b{color:#fff;font-weight:600}
+.rp-note{font-size:12px;color:var(--muted);background:var(--warnbg);display:inline-block;padding:4px 10px;border-radius:99px}
+.rp-h{display:flex;gap:16px;align-items:flex-start;margin:6px 0 22px}
+.pbreak+.rp-h{margin-top:56px}
+@media print{.pbreak+.rp-h{margin-top:0}}
+.rp-n{font:700 13px var(--sans);color:#fff;background:var(--accent);border-radius:8px;padding:6px 9px;line-height:1;margin-top:6px}
+.rp-h h2{all:unset;display:block;font:700 30px/1.15 var(--sans);letter-spacing:-.025em;color:var(--ink)}
+.rp-h p{margin:4px 0 0;color:var(--muted);font-size:14.5px}
+.rp-hero{background:#0b0b0c;color:#fff;border-radius:16px;padding:28px 30px;position:relative;overflow:hidden}
+.rp-hero::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;border-radius:50%;border:26px solid #d10f14}
+.rp-hero>*{position:relative;z-index:1}
+.rp-hero-k{font:600 13px var(--sans);color:#ff5b55;margin:0}
+.rp-hero-r{font:700 44px/1.08 var(--sans);letter-spacing:-.03em;margin:6px 0 10px;max-width:14ch}
+.rp-hero-t{font-size:16px;line-height:1.55;color:#d6d8dc;max-width:52ch;margin:0 0 14px}
+.rp-hero.pend{background:var(--warnbg);color:var(--ink)}.rp-hero.pend::after{border-color:var(--warn);opacity:.25}
+.rp-hero.pend .rp-hero-k{font:700 24px/1.25 var(--sans);color:var(--ink);letter-spacing:-.01em}.rp-hero.pend .rp-hero-t{color:var(--muted);margin-top:8px}
+.rp-hero.pend ul{margin:0;padding-left:18px;font-size:14px}
+.rp-badge{display:inline-block;font:600 12px var(--sans);padding:5px 11px;border-radius:99px;background:#1f2a22;color:#7ae0a6}
+.rp-badge.warn{background:#2e2510;color:#f0b44c}.rp-badge.bad{background:#3a1d1c;color:#ff8a80}
+.rp-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0 4px}
+.rp-tile{background:var(--tint);border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:4px}
+.rp-tile span{font:500 12.5px var(--sans);color:var(--muted)}
+.rp-tile b{font:700 26px/1.15 var(--sans);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.rp-tile i{font-style:normal;font-size:12px;color:var(--muted)}
+.rp-tile.acc{background:var(--soft)}.rp-tile.acc b{color:var(--accent)}
+.rp-why{margin-top:22px}.rp-why ul{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.rp-why li{padding:12px 16px 12px 40px;background:var(--tint);border-radius:10px;position:relative;font-size:14.5px}
+.rp-why li::before{content:"";position:absolute;left:16px;top:19px;width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.rp-h3,.rel h3.rp-h3{font:700 17px/1.3 var(--sans);letter-spacing:-.01em;margin:30px 0 6px;border:0;padding:0}
+.rp-why h3{font:700 17px var(--sans);margin:0 0 10px}
+.rp-sub{font-size:13px;color:var(--muted);margin:0 0 10px}
+.rp-regs{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.rp-reg{border:1px solid var(--line);border-radius:14px;padding:18px 20px;background:var(--surface)}
+.rp-reg.best{background:#0b0b0c;color:#fff;border-color:#0b0b0c}
+.rp-reg-h{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:24px}
+.rp-reg-h b{font:600 14.5px var(--sans)}
+.rp-reg-h span{font:700 11px var(--sans);background:var(--accent);color:#fff;border-radius:99px;padding:4px 9px}
+.rp-reg-h em{font:600 11px var(--sans);font-style:normal;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:3px 8px}
+.rp-reg-v{font:700 30px/1.1 var(--sans);letter-spacing:-.025em;margin-top:12px;font-variant-numeric:tabular-nums}
+.rp-reg-l{font-size:12px;color:var(--muted)}.rp-reg.best .rp-reg-l{color:#a3a7ae}
+.rp-bar{height:8px;background:var(--track);border-radius:99px;margin:12px 0 10px;overflow:hidden}.rp-bar i{display:block;height:100%;background:#8a8f97;border-radius:99px}
+.rp-reg.best .rp-bar{background:#2a2d31}.rp-reg.best .rp-bar i{background:var(--accent)}
+.rp-reg-f{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}.rp-reg-f b{color:var(--ink)}
+.rp-reg.best .rp-reg-f,.rp-reg.best .rp-reg-f b{color:#fff}
+.rel .stk .sb{border-radius:99px;height:18px}
+.rp-foot{font-size:12px;color:var(--muted);margin-top:14px}
+.rp-steps{display:grid;gap:12px}
+.rp-step{display:grid;grid-template-columns:44px 1fr;gap:14px;align-items:start;background:var(--tint);border-radius:14px;padding:16px 18px}
+.rp-step>span{width:44px;height:44px;border-radius:50%;background:#0b0b0c;color:#fff;display:grid;place-items:center;font:700 17px var(--sans)}
+.rp-step:first-child>span{background:var(--accent)}
+.rp-step b{font:700 16px var(--sans)}.rp-step p{margin:2px 0 0;font-size:14px;color:var(--muted)}
+.rp-tl{display:grid;gap:0;border-left:2px solid var(--line);margin-left:6px}
+.rp-tl-i{display:grid;grid-template-columns:76px 1fr;gap:14px;padding:10px 0 10px 18px;position:relative}
+.rp-tl-i::before{content:"";position:absolute;left:-7px;top:16px;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--muted)}
+.rp-tl-i.u::before{background:var(--accent);border-color:var(--accent)}
+.rp-tl-d b{display:block;font:700 18px/1 var(--sans);letter-spacing:-.02em}.rp-tl-d span{font-size:11.5px;color:var(--muted)}
+.rp-tl-t{font-size:14px;line-height:1.45}.rp-tl-t i{display:block;font-style:normal;font-size:12px;color:var(--muted);margin-top:2px}
+.rp-tl-i.u .rp-tl-t i{color:var(--accent);font-weight:600}
+.rp-ops{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.rp-op{border-radius:14px;padding:18px 20px;background:var(--tint);border-top:4px solid var(--warn)}
+.rp-op.ok{border-top-color:var(--good)}.rp-op.risco{border-top-color:var(--bad)}
+.rp-op-k{font:700 11px var(--sans);color:var(--warn)}.rp-op.ok .rp-op-k{color:var(--good)}.rp-op.risco .rp-op-k{color:var(--bad)}
+.rp-op>b{display:block;font:700 16px/1.3 var(--sans);margin:4px 0 6px;letter-spacing:-.01em}
+.rp-op p{margin:0;font-size:13.5px;line-height:1.55;color:var(--ink)}
+.rp-base{margin-top:30px}
+.rp-base-g{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.rp-base-g div{border-top:2px solid var(--ink);padding-top:10px}
+.rp-base-g span{font:700 12px var(--sans)}.rp-base-g p{font-size:13px;color:var(--muted);margin:4px 0 0}
+.rp-sig{display:grid;grid-template-columns:2fr 1fr 1fr;gap:20px;margin-top:40px}
+.rp-end{break-inside:avoid}
+.rp-sig div{border-top:1px solid var(--ink);padding-top:6px}.rp-sig span{font-size:11.5px;color:var(--muted)}
+@media screen and (max-width:760px){.card.rel{padding:24px 18px}.rp-cover{margin:-24px -18px 32px;padding:28px 22px;min-height:0}.rp-cv-mid h1{font-size:32px}.rp-cv-kp,.rp-tiles,.rp-regs,.rp-ops,.rp-base-g{grid-template-columns:1fr}.rp-hero-r{font-size:32px}}
+@media print{
+  .card.rel{padding:0!important;overflow:visible;border:0}
+  .main{padding-top:0!important}
+  .rp-cover{margin:0;width:auto;height:296mm;min-height:0;padding:20mm 20mm 18mm 24mm;border-radius:0}
+  .rp-cover::before{width:6mm}
+  .rel .rp-cv-mid{margin-top:34mm}
+  .rel .rp-cv-mid h1{font-size:34pt}
+  .rel .rp-eyebrow{font-size:11pt}
+  .rel .rp-cv-meta,.rel .rp-cv-foot,.rel .rp-cv-date{font-size:9pt}
+  .rel .rp-cv-reg{font-size:22pt}
+  .rel .rp-cv-q{font-size:10pt}
+  .rel .rp-cv-kp span{font-size:8.5pt}.rel .rp-cv-kp b{font-size:13pt}
+  .rel .rp-h h2{font-size:21pt}.rel .rp-h p{font-size:10pt}
+  .rel .rp-hero-r{font-size:30pt}.rel .rp-hero-t{font-size:11.5pt}.rel .rp-hero-k{font-size:10pt}
+  .rel .rp-hero.pend .rp-hero-k{font-size:15pt}.rel .rp-hero.pend li{font-size:10.5pt}
+  .rel .rp-tile b{font-size:18pt}.rel .rp-tile span,.rel .rp-tile i{font-size:8.5pt}
+  .rel .rp-why li{font-size:10.5pt;padding:8px 12px 8px 32px}.rel .rp-why li::before{left:12px;top:14px;width:8px;height:8px}
+  .rel .rp-h3{font-size:12.5pt}
+  .rel .rp-reg-v{font-size:20pt}.rel .rp-reg-h b{font-size:10.5pt}.rel .rp-reg-f,.rel .rp-reg-l{font-size:9pt}
+  .rel .rp-step b{font-size:11.5pt}.rel .rp-step p{font-size:10pt}
+  .rel .rp-tl-t{font-size:10pt}.rel .rp-tl-d b{font-size:13pt}
+  .rel .rp-op>b{font-size:11.5pt}.rel .rp-op p{font-size:9.5pt}
+  .rel .rp-base-g p,.rel .rp-foot,.rel .rp-sub{font-size:9pt}
+  .rp-reg,.rp-op,.rp-step,.rp-tile,.rp-hero,.rp-tl-i,.rp-why li{break-inside:avoid}
+  .rp-h{break-after:avoid}
 }
 @media (max-width:560px){.brandbar .ref{display:none}.stepper{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.stepper .sl{display:none}.stepper .sp{padding:8px;gap:6px;flex-direction:column;align-items:flex-start}.stepper .sp b{font-size:12px}.hl{padding:22px 20px 22px 28px}.titlebar .wrap{padding-top:22px;padding-bottom:18px}.card{padding:18px}}
 </style>
@@ -1367,14 +1479,14 @@ function prazoHibrido(){
   if(t<=f('2027-03-31'))return 'a próxima janela de opção é março/2027, com efeito no 2º semestre de 2027 (confirme no Portal do Simples Nacional).';
   return 'consulte no Portal do Simples Nacional a próxima janela de opção (as opções são semestrais).';
 }
-function marcos(){
-  const hoje=new Date();
-  const L=[['2026-10-30','Último dia para o Simples optar pelo IBS/CBS no regime regular (híbrido) em 2027','Resolução CGSN 194/2026 (DOU de 28/09/2026).'],
+const MARCOS=[['2026-10-30','Último dia para o Simples optar pelo IBS/CBS no regime regular (híbrido) em 2027','Resolução CGSN 194/2026 (DOU de 28/09/2026).'],
    ['2026-11-03','Abre o prazo para cancelar a opção pelo híbrido (até 20/12/2026)','Resolução CGSN 194/2026. Nova janela de opção prevista para março/2027, com efeito no 2º semestre.'],
    ['2026-12-22','Prazo do Senado para fixar a alíquota de referência da CBS de 2027','Sem resolução até lá, vale a alíquota calculada pelo TCU (11,3%), conforme Agência Senado.'],
    ['2027-01-01','Início de 2027: CBS plena, IBS de 0,1% e PIS/COFINS extintos','EC 132/2023 e LC 214/2025.'],
    ['2027-01-29','Último dia útil para comunicar a saída do Simples com efeitos em 01/01/2027','LC 123/2006, art. 30, §1º, I; confirme o último dia útil de janeiro.'],
    ['2027-04-30','Primeiro pagamento de IRPJ do ano: opção pelo Presumido','Lei 9.718/1998, art. 13, §1º (opção irretratável para o ano).']];
+function marcos(){
+  const hoje=new Date(),L=MARCOS;
   return `<ul class="tl">${L.map(([d,t,s])=>{
     const t0=new Date(hoje.getFullYear(),hoje.getMonth(),hoje.getDate()),dd=Math.round((new Date(d+'T00:00:00')-t0)/864e5),tone=dd<0?'':dd<=7?'u':dd<=60?'a':'';
     const q=dd<0?'encerrado':dd===0?'hoje':dd===1?'amanhã':'em '+dd+' dias';
@@ -2239,66 +2351,64 @@ function montarRelatorio(){
   const ws=Object.keys(R[2027]).map(k=>ranking(R[2027][k])[0].nome),igual=ws.every(x=>x===ws[0]);
   const est=[]; for(const [kr,kc,l] of [[.9,1,'receita −10%'],[1.1,1,'receita +10%'],[1,.9,'custos −10%'],[1,1.1,'custos +10%']]){est.push([l,ranking(avaliarAno(escalar(N,kr,kc),2027,N.P.cbs.base))[0].nome])}
   const estavel=est.every(([,n])=>n===w27.nome);
-  const cia=pg&&pg.nome?pg.nome:'Empresa não identificada (anexe o extrato do PGDAS-D)';
+  const cia=pg&&pg.nome?pg.nome:'Empresa não identificada';
   const cf=confianca(),dcn=docsContagem(),nD=Object.values(dcn).filter(Boolean).length;
   const emit=agora.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
   const vant=rk27[1]?w27.liq-rk27[1].liq:0;
-  h+=`<style>@page{@top-right{content:"${esc(cia).replace(/"/g,"'")}"}}@page :first{@top-right{content:none}}</style>`;
-  h+=`<section class="cv"><div class="cv-top"><div class="rel-logo">${relLogo()}</div><div class="cv-doc">Planejamento tributário<br>Emitido em ${emit}</div></div>
-   <div class="cv-mid"><p class="cv-pre">Planejamento tributário</p><h1>Qual regime deixa mais resultado em 2026 e 2027</h1><p class="co">${esc(cia)}</p><p class="cv-meta">${pg&&pg.cnpjb?'CNPJ básico '+esc(pg.cnpjb)+'<br>':''}${pg&&pg.local?esc(pg.local)+'<br>':''}Fontes: ${fontes.length?fontes.join('; '):'dados digitados manualmente'}</p></div>
-   <div class="cv-res"><p class="cv-q">${crit.length?'Parecer ainda não conclusivo':'Recomendação para 2027'}</p><p class="cv-reg">${crit.length?'Faltam dados essenciais':REG[w27.nome]}</p>
-    <table class="cv-t"><tbody>
-     <tr><td>Resultado líquido no ano</td><td>${brl(w27.liq)}</td></tr>
-     <tr><td>Vantagem sobre ${rk27[1]?REG[rk27[1].nome]:'o 2º colocado'}</td><td>${rk27[1]?brl(vant):'—'}</td></tr>
-     <tr><td>Tributos e encargos</td><td>${brl(w27.carga)} (${pc(w27.cargaPct,1)} da receita)</td></tr>
-     <tr><td>Receita bruta projetada</td><td>${brl(r27.A.rec)}</td></tr>
-    </tbody></table>
-    <p class="cv-conf">${crit.length?'Os números são preliminares até os dados serem completados.':esc(cf.t)+'. '+esc(cf.d)}</p></div>
-   <div class="cv-foot">Exato Soluções Contábeis<span>Minuta de apoio ao planejamento, sujeita à revisão e à assinatura do responsável técnico.</span></div></section>
-   <div class="pbreak"></div>`;
-  /* ===== Parte 1: relatório para o cliente (enxuto) ===== */
+  /* ===== Capa ===== */
+  const sim=r27.simples,ganhoSim=sim&&w27.nome!=='simples'?w27.liq-sim.liq:null,pend=crit.length>0;
+  h+=`<section class="rp-cover"><div class="rp-cv-in">
+   <div class="rp-cv-top"><div class="rp-logo">${relLogo()}</div><div class="rp-cv-date">${emit}</div></div>
+   <div class="rp-cv-mid"><p class="rp-eyebrow">Planejamento tributário 2026–2027</p><h1>${esc(cia)}</h1><p class="rp-cv-meta">${[pg&&pg.cnpjb?'CNPJ básico '+esc(pg.cnpjb):'',pg&&pg.local?esc(pg.local):''].filter(Boolean).join('<br>')}</p></div>
+   <div class="rp-cv-res">${pend?`<p class="rp-cv-q">Análise preliminar</p><p class="rp-cv-reg">Faltam dados para recomendar</p>`:`<p class="rp-cv-q">Recomendação para 2027</p><p class="rp-cv-reg">${REG[w27.nome]}</p>
+     <div class="rp-cv-kp"><div><span>Resultado no ano</span><b>${brl(w27.liq)}</b></div><div><span>${ganhoSim!=null?'Ganho sobre o Simples':'Vantagem sobre o 2º'}</span><b>${brl(ganhoSim!=null?ganhoSim:vant)}</b></div><div><span>Tributos sobre a receita</span><b>${pc(w27.cargaPct,1)}</b></div></div>`}</div>
+   <div class="rp-cv-foot"><b>Exato Soluções Contábeis</b><span>Documento de apoio ao planejamento, sujeito à revisão do responsável técnico.</span></div>
+  </div></section><div class="pbreak"></div>`;
+  /* ===== Parte 1: relatório para o cliente ===== */
   const nomesD={pgdas:'Extrato do PGDAS-D',saida:'Notas de saída',entrada:'Notas de entrada',tomados:'Serviços tomados',cte:'CT-e'};
-  const pt=t=>`<h2 class="pt">${t}</h2>`;
-  if(S.example)h+=parecer('atencao','Este relatório usa os <strong>dados de exemplo fictícios</strong> do programa. Não tem valor para nenhuma empresa real.');
-  /* A resposta */
-  h+=pt('A resposta');
-  if(crit.length){
-    h+=`<div class="ans pend"><p class="ans-k">Ainda não é possível recomendar um regime</p><p>Faltam dados que mudam a comparação. Os números abaixo são preliminares.</p><ul class="tight">${crit.map(c=>'<li>'+esc(c.split(' · ')[0].replace(/\s*\[.*$/,''))+'</li>').join('')}</ul></div>`;
+  let np=0;const pt=(t,sub)=>{np++;return `<header class="rp-h"><span class="rp-n">${String(np).padStart(2,'0')}</span><div><h2>${t}</h2>${sub?`<p>${sub}</p>`:''}</div></header>`};
+  const tile=(l,v,sx,cls)=>`<div class="rp-tile ${cls||''}"><span>${l}</span><b>${v}</b>${sx?`<i>${sx}</i>`:''}</div>`;
+  if(S.example)h+=`<p class="rp-note">Relatório gerado com os dados de exemplo fictícios do programa.</p>`;
+  /* 01 A resposta */
+  h+=pt('A resposta','Qual regime deixa mais dinheiro na empresa em 2027.');
+  if(pend){
+    h+=`<div class="rp-hero pend"><p class="rp-hero-k">Ainda não é possível recomendar um regime</p><p class="rp-hero-t">Faltam dados que mudam a comparação. Com eles completos, a recomendação sai neste espaço.</p><ul>${crit.map(c=>'<li>'+esc(c.split(' · ')[0].replace(/\s*\[.*$/,'').split(':')[0])+'</li>').join('')}</ul></div>`;
   }else{
-    const sim=r27.simples,mig=w27.nome!=='simples';
-    h+=`<div class="ans"><p class="ans-k">Para 2027, o regime que deixa mais resultado é</p><p class="ans-r">${REG[w27.nome]}</p><p class="ans-t">Sobram <b>${brl(w27.liq)}</b> no ano depois de custos, folha e tributos${rk27[1]?`, <b>${brl(vant)} a mais</b> que no ${REG[rk27[1].nome]}`:''}. ${mig?(sim?`Em relação a continuar no Simples Nacional, o ganho é de <b>${brl(w27.liq-sim.liq)}</b> por ano.`:''):'A empresa não precisa mudar de regime.'}</p><p class="ans-c">${esc(cf.t)}. ${esc(cf.d)}</p></div>`;
+    h+=`<div class="rp-hero"><p class="rp-hero-k">Regime recomendado para 2027</p><p class="rp-hero-r">${REG[w27.nome]}</p><p class="rp-hero-t">${w27.nome==='simples'?'A empresa já está no regime mais vantajoso e não precisa mudar.':`Mudar para este regime deixa ${brl(ganhoSim!=null?ganhoSim:vant)} a mais por ano${ganhoSim!=null?' do que continuar no Simples Nacional':''}.`}</p><span class="rp-badge ${cf.k}">${esc(cf.t)}</span></div>`;
   }
-  h+=`<h3 class="pth">Quanto sobra por ano em cada regime (2027)</h3>${barsRegimes(r27)}`;
-  {const pq=[];const s2=rk27[1];
-   if(s2&&!crit.length){const cw=catImpostos(w27),cs=catImpostos(s2),lab=catNome(2027);
-     pq.push(`${REG[w27.nome]} paga ${brl(w27.carga)} de tributos e encargos (${pc(w27.cargaPct,1)} da receita), contra ${brl(s2.carga)} (${pc(s2.cargaPct,1)}) no ${REG[s2.nome]}.`);
-     Object.keys(cw).map(k=>[k,cs[k]-cw[k]]).filter(([,d])=>Math.abs(d)>1).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,2).forEach(([k,d])=>pq.push(`${lab[k]}: ${brl(cw[k])} no ${REG[w27.nome]} e ${brl(cs[k])} no ${REG[s2.nome]}.`));}
-   if(pq.length)h+=`<h3 class="pth">Por que</h3><ul class="tight">${pq.map(t=>'<li>'+t+'</li>').join('')}</ul>`;}
-  /* O que fazer */
-  h+=`<div class="pbreak"></div>`+pt('O que fazer e quando');
+  h+=`<div class="rp-tiles">${tile('Sobra no ano',brl(w27.liq),'depois de custos, folha e tributos','acc')}${tile(ganhoSim!=null?'Ganho sobre o Simples':'Vantagem sobre o 2º colocado',brl(ganhoSim!=null?ganhoSim:vant),rk27[1]?'comparado ao '+REGC[ganhoSim!=null?'simples':rk27[1].nome]:'')}${tile('Tributos e encargos',pc(w27.cargaPct,1),brl(w27.carga)+' no ano')}</div>`;
+  {const s2=rk27[1];if(s2&&!pend){const cw=catImpostos(w27),cs=catImpostos(s2),lab=catNome(2027),pq=[];
+     pq.push(`Paga ${brl(s2.carga-w27.carga)} a menos de tributos e encargos que o ${REG[s2.nome]}.`);
+     Object.keys(cw).map(k=>[k,cs[k]-cw[k]]).filter(([,d])=>Math.abs(d)>1).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,2).forEach(([k,d])=>pq.push(`${lab[k]}: ${brl(cw[k])} contra ${brl(cs[k])} no ${REG[s2.nome]}.`));
+     h+=`<div class="rp-why"><h3>Por que</h3><ul>${pq.map(t=>'<li>'+t+'</li>').join('')}</ul></div>`}}
+  /* 02 Comparação */
+  h+=`<div class="pbreak"></div>`+pt('Os regimes lado a lado','Quanto sobra por ano em cada um, em 2027.');
+  {const rows=['simples','hibrido','presumido','real'].filter(k=>r27[k]).map(k=>r27[k]).sort((a,b)=>b.liq-a.liq),mx=Math.max(...rows.map(x=>x.liq),1);
+   h+=`<div class="rp-regs">${rows.map((x,i)=>`<div class="rp-reg ${i===0&&!pend?'best':''}"><div class="rp-reg-h"><b>${REG[x.nome]}</b>${i===0&&!pend?'<span>Recomendado</span>':x.nome==='simples'?'<em>Regime atual</em>':''}</div><div class="rp-reg-v">${brl(x.liq)}</div><div class="rp-reg-l">sobra no ano</div><div class="rp-bar"><i style="width:${Math.max(3,Math.round(Math.max(0,x.liq)/mx*100))}%"></i></div><div class="rp-reg-f"><span>Tributos <b>${pc(x.cargaPct,1)}</b></span><span>${i===0?'&nbsp;':'<b>−'+brl(rows[0].liq-x.liq)+'</b>'}</span></div></div>`).join('')}</div>`;
+   h+=`<h3 class="rp-h3">Para onde vão os tributos</h3><p class="rp-sub">Tributos e encargos de cada regime, em % da receita de ${brl(r27.A.rec)}.</p>${stkRegimes(r27,2027)}`;
+   h+=`<p class="rp-foot">Sobra = receita − compras − despesas − folha − tributos − obrigações acessórias. CBS de 2027 no cenário base de ${pc4(N.P.cbs.base)}, ainda pendente de fixação pelo Senado.</p>`;}
+  /* 03 O que fazer */
+  h+=`<div class="pbreak"></div>`+pt('O que fazer e quando','Os próximos passos e as datas que importam.');
   {const ps=[];
-   if(crit.length)ps.push('Completar os dados que faltam (listados na página anterior) e gerar o relatório de novo.');
-   else if(w27.nome==='simples'){ps.push('Continuar no Simples Nacional em 2027: não é preciso fazer nenhuma opção.');ps.push(`Acompanhar o limite: a receita dos últimos 12 meses chega a ${brl(r27.S.rbtMax)}, ${pc(r27.S.rbtMax/LIM,0)} do limite de R$ 4,8 milhões.`)}
-   else if(w27.nome==='hibrido')ps.push('Optar pelo recolhimento do IBS e da CBS pelo regime regular, ficando no Simples: '+prazoHibrido());
-   else{ps.push('Comunicar a saída do Simples Nacional até o último dia útil de janeiro de 2027 (29/01/2027), para valer desde 1º de janeiro.');ps.push(w27.nome==='presumido'?'Fazer a opção pelo Lucro Presumido com o pagamento do IRPJ do 1º trimestre (abril de 2027).':'Organizar a escrituração contábil completa desde janeiro de 2027, exigida no Lucro Real.')}
-   ps.push('Revisar a análise quando o Senado fixar a alíquota da CBS de 2027 (prazo: 22/12/2026).');
-   h+=`<ol class="steps">${ps.map(p=>'<li>'+esc(p)+'</li>').join('')}</ol><h3 class="pth">Prazos</h3>${marcos()}`;}
-  /* Comparação */
-  h+=`<div class="pbreak"></div>`+pt('Os quatro regimes lado a lado (2027)');
-  {const rows=['simples','hibrido','presumido','real'].filter(k=>r27[k]).map(k=>r27[k]).sort((a,b)=>b.liq-a.liq);
-   h+=`<div class="scroll"><table class="cmpt"><thead><tr><th>Regime</th><th>Tributos e encargos</th><th>% da receita</th><th>Sobra no ano</th><th>Diferença</th></tr></thead><tbody>${rows.map((x,i)=>`<tr class="${i===0&&!crit.length?'win':''}"><td>${REG[x.nome]}${x.nome==='simples'?' <span class="mut">(atual)</span>':''}</td><td class="n">${brl(x.carga)}</td><td class="n">${pc(x.cargaPct,1)}</td><td class="n"><b>${brl(x.liq)}</b></td><td class="n">${i===0?'—':'−'+brl(rows[0].liq-x.liq)}</td></tr>`).join('')}</tbody></table></div>`;
-   h+=`<p class="small">Receita bruta projetada para 2027: ${brl(r27.A.rec)}. Alíquota da CBS no cenário base: ${pc4(N.P.cbs.base)} (o Senado ainda vai fixá-la). Sobra = receita − compras − despesas − folha − tributos − obrigações acessórias.</p>`;
-   h+=`<h3 class="pth">Onde está o peso dos tributos</h3>${stkRegimes(r27,2027)}`;}
-  /* Oportunidades */
+   if(pend)ps.push(['Completar os dados','Preencher o que falta (listado na página da resposta) e gerar o relatório de novo.']);
+   else if(w27.nome==='simples'){ps.push(['Continuar no Simples Nacional','Em 2027 não é preciso fazer nenhuma opção.']);ps.push(['Acompanhar o limite',`A receita dos últimos 12 meses chega a ${brl(r27.S.rbtMax)}, ${pc(r27.S.rbtMax/LIM,0)} do limite de R$ 4,8 milhões.`])}
+   else if(w27.nome==='hibrido')ps.push(['Optar pelo regime regular de IBS e CBS','Ficando no Simples. '+prazoHibrido()]);
+   else{ps.push(['Comunicar a saída do Simples','Até o último dia útil de janeiro de 2027 (29/01/2027), para valer desde 1º de janeiro.']);ps.push(w27.nome==='presumido'?['Optar pelo Lucro Presumido','Com o pagamento do IRPJ do 1º trimestre, em abril de 2027.']:['Preparar a contabilidade completa','O Lucro Real exige escrituração contábil desde janeiro de 2027.'])}
+   ps.push(['Revisar com a alíquota oficial da CBS','O Senado tem até 22/12/2026 para fixá-la.']);
+   h+=`<div class="rp-steps">${ps.map(([t,d],i)=>`<div class="rp-step"><span>${i+1}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></div>`).join('')}</div>`;
+   const hoje=new Date(),t0=new Date(hoje.getFullYear(),hoje.getMonth(),hoje.getDate());
+   const fut=MARCOS.filter(([d])=>new Date(d+'T00:00:00')>=t0);
+   h+=`<h3 class="rp-h3">Calendário</h3><div class="rp-tl">${fut.map(([d,t])=>{const dd=Math.round((new Date(d+'T00:00:00')-t0)/864e5);return `<div class="rp-tl-i ${dd<=7?'u':''}"><div class="rp-tl-d"><b>${d.slice(8,10)}/${d.slice(5,7)}</b><span>${d.slice(0,4)}</span></div><div class="rp-tl-t">${esc(t)}<i>${dd===0?'hoje':dd===1?'amanhã':'em '+dd+' dias'}</i></div></div>`}).join('')}</div>`;}
+  /* 04 Oportunidades */
   {let L=[];try{L=oportunidades(N,2027,N.P.cbs.base)}catch(e){}
    const ttd=(r27.presumido&&r27.presumido.ttd)||(r27.real&&r27.real.ttd);
-   if(L.length||ttd){h+=`<div class="pbreak"></div>`+pt('Oportunidades e pontos de atenção');
-     if(ttd)h+=parecer(ttd.economia>=0?'ok':'risco',`<b>TTD ${esc(ttd.cods)}:</b> no ${r27.presumido&&r27.presumido.ttd?'Lucro Presumido':'Lucro Real'}, o ICMS fica ${brl(Math.abs(ttd.economia))} ${ttd.economia>=0?'menor':'maior'} por ano com o benefício, já considerados os fundos (FUMDES e FUNDOSOCIAL). O TTD não vale no Simples.`);
-     h+=L.slice(0,5).map(o=>parecer(o.k,`<b>${o.tit}.</b> ${o.t}`)).join('');}}
-  /* Premissas */
-  h+=pt('Base da análise');
-  h+=`<ul class="tight"><li><b>Documentos usados:</b> ${Object.keys(nomesD).filter(k=>dcn[k]).map(k=>nomesD[k]).join(', ')||'nenhum (dados digitados)'}.</li><li><b>Legislação:</b> conferida em 30/10/2026, inclusive a reforma tributária (LC 214/2025), a LC 224/2025 e a tributação de dividendos (Lei 15.270/2025).</li><li><b>Ainda dependem de definição:</b> a alíquota da CBS de 2027 (Senado) e a divisão da CBS e do IBS dentro do DAS em 2027.</li>${f.length?`<li><b>Dados a confirmar:</b> ${f.slice(0,4).map(x=>esc(x.split(' · ')[0].replace(/\s*\(.*$/,''))).join('; ')}.</li>`:''}</ul>`;
-  h+=`<div class="sig"><p class="small">Relatório elaborado com o Planejador Tributário Exato a partir dos documentos e dados informados. Minuta de apoio ao planejamento, sujeita à revisão e à assinatura do responsável técnico.</p><p>Responsável técnico: ______________________________ &nbsp; CRC: ____________ &nbsp; Data: ___/___/______</p></div>`;
+   const it=L.slice(0,5).map(o=>({k:o.k,t:o.tit,d:o.t}));
+   if(ttd)it.unshift({k:ttd.economia>=0?'ok':'risco',t:'TTD '+ttd.cods,d:`No ${r27.presumido&&r27.presumido.ttd?'Lucro Presumido':'Lucro Real'}, o ICMS fica ${brl(Math.abs(ttd.economia))} ${ttd.economia>=0?'menor':'maior'} por ano com o benefício, já descontados os fundos (FUMDES e FUNDOSOCIAL). O TTD não vale no Simples.`});
+   if(it.length){h+=`<div class="pbreak"></div>`+pt('Oportunidades e alertas','O que a empresa pode fazer para pagar menos, com os números dela.');
+     h+=`<div class="rp-ops">${it.map(o=>`<div class="rp-op ${o.k}"><span class="rp-op-k">${o.k==='ok'?'Oportunidade':o.k==='risco'?'Risco':'Atenção'}</span><b>${o.t}</b><p>${o.d}</p></div>`).join('')}</div>`;}}
+  /* Base da análise e assinatura */
+  h+=`<div class="rp-end"><div class="rp-base"><h3 class="rp-h3">Base da análise</h3><div class="rp-base-g"><div><span>Documentos</span><p>${Object.keys(nomesD).filter(k=>dcn[k]).map(k=>nomesD[k]).join(', ')||'Dados digitados'}</p></div><div><span>Legislação</span><p>Conferida em 30/10/2026, inclusive reforma tributária (LC 214/2025), LC 224/2025 e dividendos (Lei 15.270/2025).</p></div><div><span>Ainda pendente</span><p>Alíquota da CBS de 2027 (Senado) e divisão da CBS e do IBS no DAS.</p></div></div>${f.length?`<p class="rp-foot">A confirmar: ${f.slice(0,4).map(x=>esc(x.split(' · ')[0].replace(/\s*\(.*$/,'').split(':')[0])).join('; ')}.</p>`:''}</div>`;
+  h+=`<div class="rp-sig"><div><span>Responsável técnico</span></div><div><span>CRC</span></div><div><span>Data</span></div></div></div>`;
   /* ===== Parte 2: anexo técnico (opcional) ===== */
   if(ui.relAnexo){
   h+=`<div class="pbreak"></div><h2 class="ph anx">Anexo técnico</h2><p class="small">Detalhamento para conferência do contador: cálculos, enquadramento, documentos e base legal.</p>`;
@@ -2452,7 +2562,7 @@ function restaurarDocs(sn){
   ui.slotSaved=sn.counts||null;
   if(typeof ttdAuto==='function'&&S&&S.ttd)ttdAuto();
 }
-const VERSAO_PROG='2026-10-30.23';
+const VERSAO_PROG='2026-10-30.24';
 function completarS(s){
   s.example=!!s.example;
   /* rev 4 (30/10/2026): ICMS/ISS fora da base da CBS (LC 214, art. 12, §2º, V); LC 224 e redução do art. 347 ligadas */

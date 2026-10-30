@@ -549,14 +549,18 @@ function indiretos(Y,A,P,ano,cbs,regime){
   const icmsBr=temTtd?Math.max(0,A.icmsDeb-ttdRem+ttdTax+ttdFundo-(Y.icmsCred-ttdEst)):icmsSem;
   if(A.baseIcms>0&&A.icmsDeb===0&&(regime==='presumido'||regime==='real'))av.push('ICMS: a alíquota das vendas está em 0%, então o débito ficou zerado. Informe a alíquota em “Dados” ou anexe as notas de saída para o sistema estimá-la.');
   if(A.icmsDeb<Y.icmsCred)av.push('ICMS: créditos informados superam os débitos; saldo credor de '+brl(Y.icmsCred-A.icmsDeb)+' não aproveitado no cálculo.');
-  imp.ICMS=icmsBr; imp.ISS=A.iss; imp.IPI=Y.ipi;
+  const fUm=ttdIt.reduce((a,t)=>a+t.fumdes,0),fSo=ttdIt.reduce((a,t)=>a+t.fsoc,0);
+  imp.ICMS=icmsBr-(temTtd?ttdFundo:0); imp.ISS=A.iss; imp.IPI=Y.ipi;
+  if(temTtd&&fUm>0)imp.FUMDES=fUm; if(temTtd&&fSo>0)imp.FUNDOSOCIAL=fSo;
   memo.push(`ICMS = débitos − créditos = ${brl2(A.icmsDeb)} − ${brl2(Y.icmsCred)} = ${brl2(icmsBr)}  [débito = Σ receita × (1−%ST) × (1−%exp) × alíq. ICMS]`);
   memo.push(`ISS = Σ receita de serviço × (1−%exp) × alíq. ISS = ${brl2(A.iss)}`);
   if(Y.ipi)memo.push(`IPI líquido informado = ${brl2(Y.ipi)}`);
   if(!temTtd&&(A.baseIcms>0||Y.icmsCred>0))ln.push({t:'ICMS',base:A.baseIcms,al:A.baseIcms>0?pc(A.icmsDeb/A.baseIcms):'—',calc:`Débito de ${brl(A.icmsDeb)} menos crédito das entradas de ${brl(Y.icmsCred)}`,v:icmsBr,ref:'Legislação estadual',f:'ICMS devido = débito de ICMS nas vendas − crédito de ICMS das entradas',parts:[['Débito de ICMS nas vendas (base × alíquota)',A.icmsDeb],['(−) Crédito de ICMS das entradas',-Y.icmsCred]]});
   if(temTtd){const cods=ttdIt.map(t=>t.cod).join(', '),btT=ttdIt.reduce((x,t)=>x+t.bt,0),bInt=Math.max(0,A.baseIcms-btT),dInt=A.icmsDeb-ttdRem;
     memo.push(`TTD ${cods}: somente as vendas interestaduais a consumidor final pagam a carga efetiva; as vendas dentro de SC não recebem o crédito presumido e são tributadas normalmente, com os créditos das entradas correspondentes; ICMS = ${brl2(A.icmsDeb-ttdRem)} (vendas sem TTD) + ${brl2(ttdTax)} (vendas interestaduais com TTD) + ${brl2(ttdFundo)} (FUMDES e FUNDOSOCIAL) − ${brl2(Y.icmsCred-ttdEst)} (crédito após estorno de ${brl2(ttdEst)}) = ${brl2(icmsBr)}; sem o TTD seria ${brl2(icmsSem)}.`);
-    ln.push({t:'ICMS',base:A.baseIcms,al:pc(bInt>0?dInt/bInt:0)+' nas vendas dentro de SC (sem TTD)',calc:`Vendas dentro de SC: ${brl(bInt)} × ${pc(bInt>0?dInt/bInt:0)} = ${brl(dInt)}. Vendas interestaduais com TTD ${cods}: ${brl(btT)} pagam só a carga efetiva = ${brl(ttdTax)}. Fundos: ${brl(ttdFundo)}. Créditos de entrada após estorno: −${brl(Y.icmsCred-ttdEst)}`,v:icmsBr,ref:'Legislação estadual; RICMS/SC, Anexo 2',f:'ICMS = débito das vendas sem TTD + ICMS das vendas com TTD + contrapartida a fundos − crédito das entradas (após estorno)',parts:[['Débito de ICMS nas vendas sem TTD (dentro de SC e demais, tributação normal)',A.icmsDeb-ttdRem],['(+) ICMS das vendas interestaduais com TTD (base × carga efetiva)',ttdTax],['(+) FUMDES sobre o benefício líquido',ttdIt.reduce((a,t)=>a+t.fumdes,0)],['(+) FUNDOSOCIAL',ttdIt.reduce((a,t)=>a+t.fsoc,0)],['(−) Crédito de ICMS das entradas, após estorno',-(Y.icmsCred-ttdEst)]]});
+    ln.push({t:'ICMS',base:A.baseIcms,al:pc(bInt>0?dInt/bInt:0)+' nas vendas dentro de SC (sem TTD)',calc:`Vendas dentro de SC: ${brl(bInt)} × ${pc(bInt>0?dInt/bInt:0)} = ${brl(dInt)}. Vendas interestaduais com TTD ${cods}: ${brl(btT)} pagam só a carga efetiva = ${brl(ttdTax)}. Créditos de entrada após estorno: −${brl(Y.icmsCred-ttdEst)}. Os fundos do TTD aparecem em linhas separadas`,v:icmsBr-ttdFundo,ref:'Legislação estadual; RICMS/SC, Anexo 2',f:'ICMS = débito das vendas sem TTD + ICMS das vendas com TTD − crédito das entradas (após estorno)',parts:[['Débito de ICMS nas vendas sem TTD (dentro de SC e demais, tributação normal)',A.icmsDeb-ttdRem],['(+) ICMS das vendas interestaduais com TTD (base × carga efetiva)',ttdTax],['(−) Crédito de ICMS das entradas, após estorno',-(Y.icmsCred-ttdEst)]]});
+    if(fUm>0)ln.push({t:'FUMDES (fundo do TTD '+cods+')',base:ttdIt.reduce((a,t)=>a+t.benLiq,0),al:pc(ttdIt[0].benLiq>0?fUm/ttdIt.reduce((a,t)=>a+t.benLiq,0):0),calc:`Contribuição obrigatória a quem adere ao TTD: percentual sobre o benefício líquido (crédito presumido menos o estorno de créditos de entrada)`,v:fUm,ref:'Termo de concessão do TTD; RICMS/SC, Anexo 2',f:'FUMDES = % × (crédito presumido − estorno de créditos)',parts:ttdIt.map(t=>['Benefício líquido do TTD '+t.cod,t.benLiq]).concat([['(−) Contribuição ao FUMDES',fUm]])});
+    if(fSo>0)ln.push({t:'FUNDOSOCIAL (fundo do TTD '+cods+')',base:ttdIt.reduce((a,t)=>a+t.bt,0),al:pc(ttdIt[0].fsoc>0?ttdIt[0].fsoc:0,2),calc:`Contribuição obrigatória a quem adere ao TTD: ${pc(ttdIt[0].fsoc>0?ttdIt[0].fsoc:0,2)} sobre ${ttdIt[0].fsocBase==='credito'?'o crédito presumido líquido':'a base das vendas beneficiadas'}`,v:fSo,ref:'Termo de concessão do TTD; RICMS/SC, Anexo 2',f:'FUNDOSOCIAL = % × base das vendas beneficiadas',parts:[['Vendas beneficiadas pelo TTD',ttdIt.reduce((a,t)=>a+t.bt,0)],['(=) FUNDOSOCIAL',fSo]]});
     ln.push({t:'Economia do TTD '+cods,base:null,al:'—',calc:`Economia = ICMS sem o TTD (${brl(icmsSem)}) − ICMS com o TTD (${brl(icmsBr)}). Não entra no total, pois já está refletida no ICMS`,v:0,ref:'RICMS/SC, Anexo 2',info:true,f:'Comparação do ICMS devido com e sem o tratamento tributário diferenciado',parts:[['ICMS sem o TTD',icmsSem],['ICMS com o TTD',icmsBr]],resLabel:'Economia no ano',resV:icmsSem-icmsBr});
   }
   if(A.baseIss>0)ln.push({t:'ISS',base:A.baseIss,al:pc(A.iss/A.baseIss),calc:'Receita de serviços × alíquota do município',v:A.iss,ref:'LC 116/2003 e lei municipal',f:'ISS = receita de serviços × alíquota do município',parts:[['Receita de serviços (base)',A.baseIss],['Alíquota efetiva',A.baseIss>0?A.iss/A.baseIss:0,'pct']]});
@@ -936,7 +940,7 @@ function catImpostos(x){
   const c={lucro:0,pcc:0,icms:0,iss:0,cpp:0,outros:0};
   for(const [k,v] of Object.entries(x.imp)){
     if(k==='IRPJ'||k==='CSLL')c.lucro+=v; else if(['PIS','COFINS','CBS','IBS'].includes(k))c.pcc+=v;
-    else if(k==='ICMS'||k==='ICMS_fora_DAS')c.icms+=v; else if(k==='ISS'||k==='ISS_fora_DAS')c.iss+=v;
+    else if(k==='ICMS'||k==='ICMS_fora_DAS'||k==='FUMDES'||k==='FUNDOSOCIAL')c.icms+=v; else if(k==='ISS'||k==='ISS_fora_DAS')c.iss+=v;
     else if(k==='CPP')c.cpp+=v; else c.outros+=v;
   }
   c.cpp+=x.enc; return c;
@@ -1084,7 +1088,7 @@ function renderRes(){
 }
 
 /* ---------- Demonstrativo de impostos ---------- */
-const NOMEIMP={IRPJ:'IRPJ',CSLL:'CSLL',PIS:'PIS',COFINS:'COFINS',CBS:'CBS',IBS:'IBS',ICMS:'ICMS',ISS:'ISS',IPI:'IPI',CPP:'INSS patronal (CPP), RAT e terceiros'};
+const NOMEIMP={IRPJ:'IRPJ',CSLL:'CSLL',PIS:'PIS',COFINS:'COFINS',CBS:'CBS',IBS:'IBS',ICMS:'ICMS',FUMDES:'FUMDES (fundo do TTD)',FUNDOSOCIAL:'FUNDOSOCIAL (fundo do TTD)',ISS:'ISS',IPI:'IPI',CPP:'INSS patronal (CPP), RAT e terceiros'};
 function mapaImp(x){
   const m={IRPJ:0,CSLL:0,PIS:0,COFINS:0,CBS:0,IBS:0,ICMS:0,ISS:0,IPI:0,CPP:0};
   for(const [k,v] of Object.entries(x.imp)){const n=k.replace('_fora_DAS','');m[n]=(m[n]||0)+v}
@@ -2033,7 +2037,7 @@ function restaurarDocs(sn){
   ui.slotSaved=sn.counts||null;
   if(typeof ttdAuto==='function'&&S&&S.ttd)ttdAuto();
 }
-const VERSAO_PROG='2026-10-30.16';
+const VERSAO_PROG='2026-10-30.17';
 function completarS(s){
   s.example=!!s.example;
   const base=exemplo();
